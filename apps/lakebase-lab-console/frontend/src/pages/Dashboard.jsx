@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 
+function cleanState(raw) {
+  if (!raw) return 'unknown'
+  const dot = raw.lastIndexOf('.')
+  return dot >= 0 ? raw.slice(dot + 1) : raw
+}
+
 export default function Dashboard({ onNavigate }) {
   const [health, setHealth] = useState(null)
   const [config, setConfig] = useState(null)
@@ -10,33 +16,23 @@ export default function Dashboard({ onNavigate }) {
   const [endpoints, setEndpoints] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    Promise.allSettled([
-      api.health().then(setHealth),
-      api.config().then(setConfig),
-      api.dbtest().then(setDbStatus),
-      api.tableStats().then(setStats),
-      api.listBranches().then(setBranches),
-      api.listEndpoints('production').then(setEndpoints),
-    ]).finally(() => setLoading(false))
-  }, [])
-
-  const refresh = () => {
+  const load = () => {
     setLoading(true)
     Promise.allSettled([
       api.health().then(setHealth),
-      api.dbtest().then(setDbStatus),
-      api.tableStats().then(setStats),
-      api.listEndpoints('production').then(setEndpoints),
+      api.config().then(setConfig),
+      api.dbtest().then(setDbStatus).catch((e) => setDbStatus({ db_connected: false, error: e.message })),
+      api.tableStats().then(setStats).catch(() => setStats({})),
+      api.listBranches().then(setBranches).catch(() => setBranches([])),
+      api.listEndpoints('production').then(setEndpoints).catch(() => setEndpoints([])),
     ]).finally(() => setLoading(false))
   }
+
+  useEffect(load, [])
 
   const ep = endpoints[0] || {}
   const connected = dbStatus?.db_connected === true
   const totalRows = Object.values(stats).reduce((a, b) => a + (b > 0 ? b : 0), 0)
-  const workspaceHost = typeof window !== 'undefined'
-    ? window.location.origin.replace(/apps\.databricksapps\.com.*/, '').replace(/https:\/\/[^.]+\./, 'https://') || ''
-    : ''
 
   return (
     <div>
@@ -46,7 +42,7 @@ export default function Dashboard({ onNavigate }) {
             <h2>Dashboard</h2>
             <p>Lakebase Autoscaling project overview and health</p>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={refresh} disabled={loading}>
+          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
@@ -62,8 +58,13 @@ export default function Dashboard({ onNavigate }) {
             </div>
             <div className="status-banner-detail">
               {config?.project_id || 'No project configured'}
-              {ep.state && <> &middot; Compute: {ep.state.replace('EndpointCurrentState.', '')}</>}
+              {ep.state && <> &middot; Compute: {cleanState(ep.state)}</>}
             </div>
+            {!connected && dbStatus?.error && (
+              <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4, maxWidth: 500, wordBreak: 'break-word' }}>
+                {dbStatus.error}
+              </div>
+            )}
           </div>
         </div>
         <div className="status-banner-right">
@@ -96,27 +97,33 @@ export default function Dashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* Table Stats */}
+      {/* Table Stats + Endpoint */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card">
           <div className="card-header">
             <h3>Table Overview</h3>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr><th>Table</th><th style={{ textAlign: 'right' }}>Rows</th></tr>
-            </thead>
-            <tbody>
-              {Object.entries(stats).map(([name, count]) => (
-                <tr key={name}>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>demo.{name}</td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                    {count >= 0 ? count.toLocaleString() : <span style={{ color: 'var(--danger)' }}>err</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {Object.keys(stats).length === 0 ? (
+            <div className="empty-state" style={{ padding: 20 }}>
+              <p style={{ fontSize: 12 }}>{connected ? 'Loading table stats...' : 'Connect to Lakebase to view tables'}</p>
+            </div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr><th>Table</th><th style={{ textAlign: 'right' }}>Rows</th></tr>
+              </thead>
+              <tbody>
+                {Object.entries(stats).map(([name, count]) => (
+                  <tr key={name}>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>demo.{name}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {count >= 0 ? count.toLocaleString() : <span className="badge badge-danger">error</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="card">
@@ -132,12 +139,12 @@ export default function Dashboard({ onNavigate }) {
               <div className="detail-row">
                 <span className="detail-label">State</span>
                 <span className={`badge ${ep.state?.includes('ACTIVE') ? 'badge-success' : 'badge-warning'}`}>
-                  {ep.state?.replace('EndpointCurrentState.', '') || 'unknown'}
+                  {cleanState(ep.state)}
                 </span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Type</span>
-                <span className="detail-value">{ep.endpoint_type?.replace('ENDPOINT_TYPE_', '') || '--'}</span>
+                <span className="detail-value">{ep.endpoint_type?.replace(/^.*\./, '') || '--'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Autoscaling</span>
@@ -174,35 +181,35 @@ export default function Dashboard({ onNavigate }) {
           <h3>Quick Actions</h3>
         </div>
         <div className="quick-actions-grid">
+          <button className="quick-action-card" onClick={() => onNavigate('autoscale')}>
+            <div className="qa-icon">&#128200;</div>
+            <div className="qa-title">Autoscale Demo</div>
+            <div className="qa-desc">Spike traffic and watch compute scale in real time</div>
+          </button>
           <button className="quick-action-card" onClick={() => onNavigate('branches')}>
             <div className="qa-icon">&#9875;</div>
             <div className="qa-title">Branch Manager</div>
             <div className="qa-desc">Create, review, and delete database branches</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('compute')}>
-            <div className="qa-icon">&#9889;</div>
-            <div className="qa-title">Autoscaling</div>
-            <div className="qa-desc">Configure compute CU limits and view endpoints</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('loadtest')}>
-            <div className="qa-icon">&#128640;</div>
-            <div className="qa-title">Load Test</div>
-            <div className="qa-desc">Spike traffic and watch autoscaling in action</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('data')}>
             <div className="qa-icon">&#128451;</div>
             <div className="qa-title">Data Ops</div>
             <div className="qa-desc">CRUD operations, JSONB queries, audit log</div>
           </button>
-          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
-            <div className="qa-icon">&#128260;</div>
-            <div className="qa-title">Reverse ETL</div>
-            <div className="qa-desc">Sync Delta Lake tables into Lakebase</div>
-          </button>
           <button className="quick-action-card" onClick={() => onNavigate('agent')}>
             <div className="qa-icon">&#129302;</div>
             <div className="qa-title">Agent Memory</div>
             <div className="qa-desc">Persistent AI agent session and message storage</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('compute')}>
+            <div className="qa-icon">&#9889;</div>
+            <div className="qa-title">Compute Config</div>
+            <div className="qa-desc">Configure compute CU limits and view endpoints</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
+            <div className="qa-icon">&#128260;</div>
+            <div className="qa-title">Reverse ETL</div>
+            <div className="qa-desc">Sync Delta Lake tables into Lakebase</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('api')}>
             <div className="qa-icon">&#128268;</div>

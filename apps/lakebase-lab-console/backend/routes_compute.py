@@ -4,7 +4,7 @@ import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.postgres import Endpoint, EndpointSpec, FieldMask
+from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
 
 router = APIRouter(prefix="/api/compute", tags=["compute"])
 
@@ -79,6 +79,7 @@ def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest):
             endpoint=Endpoint(
                 name=ep_name,
                 spec=EndpointSpec(
+                    endpoint_type=EndpointType.ENDPOINT_TYPE_READ_WRITE,
                     autoscaling_limit_min_cu=req.min_cu,
                     autoscaling_limit_max_cu=req.max_cu,
                 ),
