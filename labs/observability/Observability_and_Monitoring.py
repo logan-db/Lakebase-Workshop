@@ -14,7 +14,7 @@
 # MAGIC 5. Identify slow query patterns
 # MAGIC 6. Learn where to find the Lakebase monitoring dashboard in the workspace
 # MAGIC
-# MAGIC **Run `00_Setup_Lakebase_Project` first.** Run `04_Data_Operations` first
+# MAGIC **Run `00_Setup_Lakebase_Project` first.** Running `labs/data-operations/Data_Operations` first
 # MAGIC for more interesting metrics.
 
 # COMMAND ----------
@@ -24,7 +24,7 @@
 
 # COMMAND ----------
 
-import re, socket, subprocess, psycopg
+import re, psycopg
 from psycopg.rows import dict_row
 from databricks.sdk import WorkspaceClient
 
@@ -46,17 +46,6 @@ def get_connection():
     cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
     params = {"host": host, "dbname": "databricks_postgres",
               "user": user_email, "password": cred.token, "sslmode": "require"}
-    try:
-        params["hostaddr"] = socket.gethostbyname(host)
-    except Exception:
-        try:
-            r = subprocess.run(["dig", "+short", host], capture_output=True, text=True, timeout=5)
-            for line in r.stdout.strip().split("\n"):
-                if line.strip() and not line.startswith(";"):
-                    params["hostaddr"] = line.strip()
-                    break
-        except Exception:
-            pass
     return psycopg.connect(**params, row_factory=dict_row)
 
 conn = get_connection()
@@ -342,5 +331,16 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`06_Reverse_ETL`** to sync Delta Lake tables into Lakebase.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

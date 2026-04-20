@@ -144,7 +144,7 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 1. Walk through the architecture diagrams (resource hierarchy, platform fit)
 2. Run the project creation — takes ~2 min
 3. Show the seeded tables and products
-4. Key talking point: *"Fully managed PostgreSQL 17, no infrastructure to configure."*
+4. Key talking point: *"Fully managed PostgreSQL, no infrastructure to configure."*
 
 ### Development Experience — Branching
 
@@ -176,7 +176,7 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 2. Show array filtering with `ANY` and `&&`
 3. Insert → update → delete a product, then check the audit log
 4. Run a transaction, show atomicity
-5. Key talking point: *"Full PostgreSQL 17 — JSONB, arrays, triggers, transactions."*
+5. Key talking point: *"Full PostgreSQL — JSONB, arrays, triggers, transactions."*
 
 ### Observability — Monitoring
 
@@ -216,7 +216,6 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 | Foundation hangs on "Waiting for endpoint" | Endpoint creation can take 2–3 minutes. Let it run. |
 | "password authentication failed" | Token expired (1h TTL). Re-run the connection cell. |
 | "permission denied for table" | Run the GRANT statements from `docs/PERMISSIONS.md` |
-| Notebook can't resolve hostname | macOS DNS issue. The notebooks include a `dig` fallback — ensure `dig` is available. |
 | Lab Console shows "Loading..." forever | Check `/api/dbtest` — likely missing DB resource or SP permissions |
 
 ## Cleanup

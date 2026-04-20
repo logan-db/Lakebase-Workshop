@@ -23,7 +23,7 @@
 
 # COMMAND ----------
 
-import re, uuid, json, socket, subprocess, psycopg
+import re, uuid, json, psycopg
 from psycopg.rows import dict_row
 from databricks.sdk import WorkspaceClient
 
@@ -45,17 +45,6 @@ def get_connection():
     cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
     params = {"host": host, "dbname": "databricks_postgres",
               "user": user_email, "password": cred.token, "sslmode": "require"}
-    try:
-        params["hostaddr"] = socket.gethostbyname(host)
-    except Exception:
-        try:
-            r = subprocess.run(["dig", "+short", host], capture_output=True, text=True, timeout=5)
-            for line in r.stdout.strip().split("\n"):
-                if line.strip() and not line.startswith(";"):
-                    params["hostaddr"] = line.strip()
-                    break
-        except Exception:
-            pass
     return psycopg.connect(**params, row_factory=dict_row)
 
 conn = get_connection()
@@ -188,5 +177,16 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`09_Deploy_Lab_Console_App`** to deploy the interactive UI that ties all of these features together.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

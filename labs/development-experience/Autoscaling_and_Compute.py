@@ -125,5 +125,16 @@ for ep_summary in endpoints:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`04_Data_Operations`** to explore CRUD operations, JSONB queries, and audit trails.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

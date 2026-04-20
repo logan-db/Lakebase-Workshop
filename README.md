@@ -7,41 +7,41 @@ A hands-on workshop for exploring **Databricks Lakebase Autoscaling** — a full
 This workshop follows a **foundation + choose-your-path** model:
 
 ```
-                    ┌──────────────────────────┐
-                    │   00_Setup_Lakebase_Project   │
-                    │   (Foundation — required)      │
-                    └─────────────┬────────────┘
-                                  │
-            ┌─────────────────────┼─────────────────────┐
-            │                     │                     │
-            ▼                     ▼                     ▼
-  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-  │  Development    │  │  Data           │  │  Reverse ETL    │
-  │  Experience     │  │  Operations     │  │                 │
-  │  ───────────    │  │  ───────────    │  │  ───────────    │
-  │  • Branching    │  │  • CRUD/JSONB   │  │  • Synced       │
-  │  • Autoscaling  │  │  • Transactions │  │    Tables       │
-  │  • Scale-to-0   │  │  • Advanced SQL │  │  • Delta → PG   │
-  └─────────────────┘  └─────────────────┘  └─────────────────┘
+                    ┌───────────────────────────────┐
+                    │   00_Setup_Lakebase_Project    │
+                    │      (Foundation — required)   │
+                    └───────────────┬───────────────┘
+                                    │
+         ┌──────────────────────────┼──────────────────────────┐
+         │                          │                          │
+         ▼                          ▼                          ▼
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│ 1. Data         │      │ 2. Reverse ETL  │      │ 3. Development  │
+│    Operations   │      │                 │      │    Experience   │
+│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
+│ • CRUD/JSONB    │      │ • Synced Tables │      │ • Branching     │
+│ • Transactions  │      │ • Delta → PG    │      │ • Autoscaling   │
+│ • Advanced SQL  │      │                 │      │ • Scale-to-zero │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
 
-  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-  │  Observability  │  │  Backup &       │  │  Agentic        │
-  │                 │  │  Recovery       │  │  Memory         │
-  │  ───────────    │  │  ───────────    │  │  ───────────    │
-  │  • pg_stat      │  │  • PITR         │  │  • Sessions     │
-  │  • Index usage  │  │  • Snapshots    │  │  • Multi-turn   │
-  │  • Monitoring   │  │  • Restore      │  │  • JSONB context│
-  └─────────────────┘  └─────────────────┘  └─────────────────┘
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│ 4. Observability│      │ 5. Auth &       │      │ 6. Backup &     │
+│                 │      │    Permissions  │      │    Recovery     │
+│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
+│ • pg_stat views │      │ • OAuth tokens  │      │ • PITR          │
+│ • Index usage   │      │ • Roles/grants  │      │ • Snapshots     │
+│ • Monitoring    │      │ • External tools│      │ • Restore       │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
 
-  ┌─────────────────┐  ┌─────────────────┐
-  │  Authentication │  │  App Deployment │
-  │                 │  │  (Capstone)     │
-  │  ───────────    │  │  ───────────    │
-  │  • OAuth tokens │  │  • React +      │
-  │  • Roles/grants │  │    FastAPI      │
-  │  • External     │  │  • Full-stack   │
-  │    tools        │  │    Lakebase app │
-  └─────────────────┘  └─────────────────┘
+┌─────────────────┐      ┌─────────────────┐
+│ 7. Agentic      │      │ 8. App          │
+│    Memory       │      │    Deployment   │
+│ ─────────────── │      │ ─────────────── │
+│ • Sessions      │      │ • React +       │
+│ • Multi-turn    │      │   FastAPI       │
+│ • JSONB context │      │ • Full-stack    │
+└─────────────────┘      │   (capstone)    │
+                         └─────────────────┘
 ```
 
 ### Foundation (required)
@@ -56,16 +56,16 @@ Run this first — it creates your Lakebase project and seeds the demo schema:
 
 After completing the foundation, pick any path based on your interest. Each path is **independent** — no need to follow a specific order.
 
-| Path | Folder | Labs | Description |
-|------|--------|------|-------------|
-| **Development Experience** | `labs/development-experience/` | Branches, Autoscaling | Branching, CU sizing, scale-to-zero |
-| **Data Operations** | `labs/data-operations/` | Data Operations, Advanced SQL | CRUD, JSONB, arrays, triggers, transactions |
-| **Reverse ETL** | `labs/reverse-etl/` | Reverse ETL, Synced Table | Sync Delta Lake tables into Lakebase |
-| **Observability** | `labs/observability/` | Observability & Monitoring | pg_stat views, index analysis, monitoring |
-| **Backup & Recovery** | `labs/backup-recovery/` | Backup & Recovery | PITR, branch snapshots, instant restore |
-| **Agentic Memory** | `labs/agentic-memory/` | Agent Memory | Persistent AI agent memory with sessions |
-| **Authentication** | `labs/authentication/` | Auth & Permissions | OAuth tokens, roles, two-layer permissions |
-| **App Deployment** | `labs/app-deployment/` | Deploy Lab Console | Full-stack React + FastAPI app (capstone) |
+| # | Path | Folder | Labs | Description |
+|---|------|--------|------|-------------|
+| 1 | **Data Operations** | `labs/data-operations/` | Data Operations, Advanced SQL | CRUD, JSONB, arrays, triggers, transactions |
+| 2 | **Reverse ETL** | `labs/reverse-etl/` | Reverse ETL, Synced Table | Sync Delta Lake tables into Lakebase |
+| 3 | **Development Experience** | `labs/development-experience/` | Branches, Autoscaling | Branching, CU sizing, scale-to-zero |
+| 4 | **Observability** | `labs/observability/` | Observability & Monitoring | pg_stat views, index analysis, monitoring |
+| 5 | **Authentication** | `labs/authentication/` | Auth & Permissions | OAuth tokens, roles, two-layer permissions |
+| 6 | **Backup & Recovery** | `labs/backup-recovery/` | Backup & Recovery | PITR, branch snapshots, instant restore |
+| 7 | **Agentic Memory** | `labs/agentic-memory/` | Agent Memory | Persistent AI agent memory with sessions |
+| 8 | **App Deployment** | `labs/app-deployment/` | Deploy Lab Console | Full-stack React + FastAPI app (capstone) |
 
 Each path folder has its own `README.md` with detailed prerequisites and key concepts.
 
@@ -146,10 +146,10 @@ Browse the paths in `labs/` and pick whichever interests you. Each lab notebook 
 
 | Role | Recommended Paths |
 |------|-------------------|
-| **Platform Engineer** | Development Experience → Observability → Backup & Recovery |
 | **Data Engineer** | Data Operations → Reverse ETL → Observability |
-| **App Developer** | Authentication → Agentic Memory → App Deployment |
-| **Quick Overview** | Development Experience → Data Operations |
+| **Platform Engineer** | Development Experience → Observability → Backup & Recovery |
+| **App Developer** | Data Operations → Agentic Memory → App Deployment |
+| **Quick Overview** | Data Operations → Development Experience |
 
 ## Lab Console App
 
@@ -178,7 +178,7 @@ FastAPI Backend (Databricks App)
     +---> psycopg3 (PostgreSQL wire) -- CRUD, load test, agent memory
     |
     v
-Lakebase Autoscaling (PostgreSQL 17)
+Lakebase Autoscaling (PostgreSQL)
     Project > Branch > Endpoint
 ```
 
@@ -228,7 +228,7 @@ Lakebase-Workshop/
 
 - [Databricks Lakebase Documentation](https://docs.databricks.com/en/lakebase/index.html)
 - [Databricks Apps Documentation](https://docs.databricks.com/en/dev-tools/databricks-apps/)
-- [PostgreSQL 17 Documentation](https://www.postgresql.org/docs/17/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 
 ## Credits
 

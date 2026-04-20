@@ -1,6 +1,6 @@
 # Data Operations
 
-Work with PostgreSQL 17's full feature set: CRUD, JSONB documents, array operators, audit triggers, and transactions.
+Work with PostgreSQL's full feature set: CRUD, JSONB documents, array operators, audit triggers, and transactions.
 
 ## Labs
 

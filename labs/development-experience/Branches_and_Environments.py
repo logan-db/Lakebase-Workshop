@@ -21,7 +21,7 @@
 
 # COMMAND ----------
 
-import re, time, socket, subprocess, psycopg
+import re, time, psycopg
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
 
@@ -100,17 +100,6 @@ def connect_to_branch(project_id, branch_id):
 
     params = {"host": host, "dbname": "databricks_postgres",
               "user": w.current_user.me().user_name, "password": cred.token, "sslmode": "require"}
-    try:
-        params["hostaddr"] = socket.gethostbyname(host)
-    except Exception:
-        try:
-            r = subprocess.run(["dig", "+short", host], capture_output=True, text=True, timeout=5)
-            for line in r.stdout.strip().split("\n"):
-                if line.strip() and not line.startswith(";"):
-                    params["hostaddr"] = line.strip()
-                    break
-        except Exception:
-            pass
     return psycopg.connect(**params)
 
 print("Waiting for dev branch endpoint to activate...")
@@ -192,5 +181,16 @@ print("\n✓ Branch isolation confirmed — changes on dev do not affect product
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`02_Authentication_and_Permissions`** to understand OAuth tokens, roles, and secure access.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Try `Autoscaling_and_Compute` in this folder, or continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

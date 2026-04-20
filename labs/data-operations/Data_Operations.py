@@ -22,7 +22,7 @@
 
 # COMMAND ----------
 
-import re, socket, subprocess, psycopg
+import re, psycopg
 from psycopg.rows import dict_row
 from databricks.sdk import WorkspaceClient
 
@@ -44,17 +44,6 @@ def get_connection():
     cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
     params = {"host": host, "dbname": "databricks_postgres",
               "user": user_email, "password": cred.token, "sslmode": "require"}
-    try:
-        params["hostaddr"] = socket.gethostbyname(host)
-    except Exception:
-        try:
-            r = subprocess.run(["dig", "+short", host], capture_output=True, text=True, timeout=5)
-            for line in r.stdout.strip().split("\n"):
-                if line.strip() and not line.startswith(";"):
-                    params["hostaddr"] = line.strip()
-                    break
-        except Exception:
-            pass
     return psycopg.connect(**params, row_factory=dict_row)
 
 conn = get_connection()
@@ -264,5 +253,16 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`05_Observability_and_Monitoring`** to deep-dive into database health metrics.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Try `Advanced_Postgres.sql` in this folder for more SQL patterns, or continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis — richer after running this lab |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

@@ -21,7 +21,7 @@
 # MAGIC %md
 # MAGIC ## Lakebase Architecture
 # MAGIC
-# MAGIC Lakebase Autoscaling is Databricks' fully managed **PostgreSQL 17** service
+# MAGIC Lakebase Autoscaling is Databricks' fully managed **PostgreSQL** service
 # MAGIC for operational (OLTP) workloads. It runs inside your Databricks workspace
 # MAGIC and is governed by Unity Catalog.
 # MAGIC
@@ -179,34 +179,12 @@ if not endpoint:
 # COMMAND ----------
 
 import psycopg
-import subprocess
-import socket
 
 host = endpoint.status.hosts.host
 cred = w.postgres.generate_database_credential(endpoint=endpoint.name)
 username = user_email
 
-# macOS DNS workaround
-def resolve(hostname):
-    try:
-        return socket.gethostbyname(hostname)
-    except socket.gaierror:
-        pass
-    try:
-        result = subprocess.run(["dig", "+short", hostname], capture_output=True, text=True, timeout=5)
-        for line in result.stdout.strip().split("\n"):
-            line = line.strip()
-            if line and not line.startswith(";"):
-                return line
-    except Exception:
-        pass
-    return None
-
 params = {"host": host, "dbname": "databricks_postgres", "user": username, "password": cred.token, "sslmode": "require"}
-hostaddr = resolve(host)
-if hostaddr:
-    params["hostaddr"] = hostaddr
-
 conn = psycopg.connect(**params)
 print(f"✓ Connected to Lakebase")
 
@@ -387,20 +365,28 @@ print(f"  Host:          {endpoint.status.hosts.host}")
 print(f"  Database:      databricks_postgres")
 print(f"  Schema:        demo")
 print(f"  Username:      {user_email}")
-print(f"  PG Version:    {PG_VERSION}")
 print("=" * 60)
 print()
-print("Next steps — pick any lab path:")
-print("  → labs/development-experience/  Branching, autoscaling, scale-to-zero")
-print("  → labs/data-operations/         CRUD, JSONB, transactions, advanced SQL")
-print("  → labs/reverse-etl/             Sync Delta Lake tables into Lakebase")
-print("  → labs/observability/           pg_stat views, index analysis, monitoring")
-print("  → labs/backup-recovery/         PITR, branch snapshots, instant restore")
-print("  → labs/agentic-memory/          Persistent AI agent memory")
-print("  → labs/authentication/          OAuth tokens, roles, permissions")
-print("  → labs/app-deployment/          Full-stack Lab Console app (capstone)")
-print()
 print(f"  For app.yaml, set LAKEBASE_PROJECT_ID to: {PROJECT_ID}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Your Lakebase project is ready. Pick any lab path below — they're ordered from
+# MAGIC foundational to advanced, but each one is independent. Start wherever interests you most.
+# MAGIC
+# MAGIC | | Path | Folder | What You'll Learn |
+# MAGIC |---|------|--------|-------------------|
+# MAGIC | 1 | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | 2 | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | 3 | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | 4 | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | 5 | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | 6 | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | 7 | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | 8 | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
 
 # COMMAND ----------
 

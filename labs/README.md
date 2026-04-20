@@ -4,16 +4,18 @@ After completing the **foundation** (`notebooks/00_Setup_Lakebase_Project`), cho
 
 ## Available Paths
 
-| Path | Folder | What You'll Explore |
-|------|--------|---------------------|
-| [Development Experience](development-experience/) | `development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-| [Data Operations](data-operations/) | `data-operations/` | CRUD, JSONB, arrays, audit triggers, transactions, advanced SQL |
-| [Reverse ETL](reverse-etl/) | `reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-| [Observability](observability/) | `observability/` | pg_stat views, index analysis, connection monitoring |
-| [Backup & Recovery](backup-recovery/) | `backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-| [Agentic Memory](agentic-memory/) | `agentic-memory/` | Persistent AI agent memory with session/message storage |
-| [Authentication](authentication/) | `authentication/` | OAuth tokens, two-layer permissions, role grants |
-| [App Deployment](app-deployment/) | `app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+Ordered from foundational to advanced:
+
+| # | Path | Folder | What You'll Explore |
+|---|------|--------|---------------------|
+| 1 | [Data Operations](data-operations/) | `data-operations/` | CRUD, JSONB, arrays, audit triggers, transactions, advanced SQL |
+| 2 | [Reverse ETL](reverse-etl/) | `reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+| 3 | [Development Experience](development-experience/) | `development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+| 4 | [Observability](observability/) | `observability/` | pg_stat views, index analysis, connection monitoring |
+| 5 | [Authentication](authentication/) | `authentication/` | OAuth tokens, two-layer permissions, role grants |
+| 6 | [Backup & Recovery](backup-recovery/) | `backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+| 7 | [Agentic Memory](agentic-memory/) | `agentic-memory/` | Persistent AI agent memory with session/message storage |
+| 8 | [App Deployment](app-deployment/) | `app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
 
 ## Path Dependencies
 
@@ -22,14 +24,14 @@ Most paths only require the foundation. A few have soft recommendations:
 ```
 Foundation (00_Setup)
     │
-    ├── Development Experience
-    ├── Data Operations
-    │       └── (recommended before) Observability
-    ├── Reverse ETL
-    ├── Backup & Recovery
-    ├── Agentic Memory
-    ├── Authentication
-    └── App Deployment (best after exploring other paths)
+    ├── 1. Data Operations
+    │       └── (recommended before) 4. Observability
+    ├── 2. Reverse ETL
+    ├── 3. Development Experience
+    ├── 5. Authentication
+    ├── 6. Backup & Recovery
+    ├── 7. Agentic Memory
+    └── 8. App Deployment (best after exploring other paths)
 ```
 
 ## Suggested Combinations

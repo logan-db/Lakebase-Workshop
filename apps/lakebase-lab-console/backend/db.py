@@ -8,8 +8,6 @@ Supports two modes:
 
 import asyncio
 import os
-import subprocess
-import socket
 import time
 from contextlib import contextmanager
 
@@ -29,26 +27,6 @@ def _get_workspace_client():
         from databricks.sdk import WorkspaceClient
         _workspace_client = WorkspaceClient()
     return _workspace_client
-
-
-def _resolve_hostname(hostname: str) -> str | None:
-    """Resolve hostname, falling back to dig on macOS."""
-    try:
-        return socket.gethostbyname(hostname)
-    except socket.gaierror:
-        pass
-    try:
-        result = subprocess.run(
-            ["dig", "+short", hostname],
-            capture_output=True, text=True, timeout=5,
-        )
-        for line in result.stdout.strip().split("\n"):
-            line = line.strip()
-            if line and not line.startswith(";"):
-                return line
-    except Exception:
-        pass
-    return None
 
 
 def _refresh_token() -> str:
@@ -124,10 +102,6 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
         raise RuntimeError(
             "Set PGHOST/PGUSER or LAKEBASE_PROJECT_ID to connect to Lakebase"
         )
-
-    hostaddr = _resolve_hostname(params["host"])
-    if hostaddr:
-        params["hostaddr"] = hostaddr
 
     return params
 

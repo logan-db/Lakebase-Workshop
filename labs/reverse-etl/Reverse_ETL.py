@@ -7,14 +7,18 @@
 # MAGIC **Lakebase feature:** Sync Delta Lake tables into Lakebase PostgreSQL
 # MAGIC
 # MAGIC In this notebook you will:
-# MAGIC 1. Create a Delta table with Change Data Feed (CDF) enabled
+# MAGIC 1. Set up a Delta source table (use your own data or generate sample data)
 # MAGIC 2. Set up a synced table that pushes data to Lakebase
 # MAGIC 3. Check sync status
 # MAGIC 4. Update the source and observe the sync
 # MAGIC
 # MAGIC **Prerequisites:**
 # MAGIC - Run `00_Setup_Lakebase_Project` first
-# MAGIC - You need a Unity Catalog catalog & schema with write access
+# MAGIC - A Unity Catalog catalog & schema with write access
+# MAGIC
+# MAGIC > **Bring your own data or use ours:** This lab generates a sample products table
+# MAGIC > by default. If you already have a Delta table you'd like to sync, skip the
+# MAGIC > sample data step and point the configuration at your own table instead.
 # MAGIC
 # MAGIC > **Note:** Synced tables are owned by the sync pipeline. If you deploy the
 # MAGIC > Lab Console app, you must also GRANT the app's Service Principal access
@@ -44,46 +48,69 @@ print(f"Project: {PROJECT_ID}")
 
 # MAGIC %md
 # MAGIC ## Configuration
-# MAGIC Update these values for your environment.
+# MAGIC
+# MAGIC Set your catalog and schema below. The lab will create the schema if it
+# MAGIC doesn't exist. By default it generates a sample `sample_products` table —
+# MAGIC set `USE_OWN_DATA = True` if you want to sync an existing Delta table instead.
 
 # COMMAND ----------
 
-UC_CATALOG = "<your-catalog>"      # e.g. "main" or "workshop"
-UC_SCHEMA  = "<your-schema>"       # e.g. "lakebase_lab"
+UC_CATALOG = "main"
+UC_SCHEMA  = f"lakebase_lab_{sanitize(user_email)}"
 
-SOURCE_TABLE     = f"{UC_CATALOG}.{UC_SCHEMA}.sample_products"
-SYNCED_TABLE     = f"{UC_CATALOG}.{UC_SCHEMA}.products_synced"
+USE_OWN_DATA = False
+
+if USE_OWN_DATA:
+    SOURCE_TABLE = "<catalog.schema.your_table>"   # point to your existing Delta table
+else:
+    SOURCE_TABLE = f"{UC_CATALOG}.{UC_SCHEMA}.sample_products"
+
+SYNCED_TABLE = f"{UC_CATALOG}.{UC_SCHEMA}.products_synced"
+
+print(f"Catalog:      {UC_CATALOG}")
+print(f"Schema:       {UC_SCHEMA}")
+print(f"Source table:  {SOURCE_TABLE}")
+print(f"Synced table:  {SYNCED_TABLE}")
+print(f"Using own data: {USE_OWN_DATA}")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 1. Create a Delta Source Table
-# MAGIC Change Data Feed must be enabled for synced tables to track changes.
+# MAGIC
+# MAGIC Change Data Feed (CDF) must be enabled for synced tables to track changes.
+# MAGIC
+# MAGIC **Using your own data?** Skip this cell — just make sure your table has CDF
+# MAGIC enabled: `ALTER TABLE <table> SET TBLPROPERTIES (delta.enableChangeDataFeed = true)`
 
 # COMMAND ----------
 
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {UC_CATALOG}.{UC_SCHEMA}")
 
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {SOURCE_TABLE} (
-    product_id INT,
-    name STRING,
-    price DOUBLE,
-    category STRING,
-    updated_at TIMESTAMP
-)
-USING DELTA
-TBLPROPERTIES (delta.enableChangeDataFeed = true)
-""")
+if not USE_OWN_DATA:
+    spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {SOURCE_TABLE} (
+        product_id INT,
+        name STRING,
+        price DOUBLE,
+        category STRING,
+        updated_at TIMESTAMP
+    )
+    USING DELTA
+    TBLPROPERTIES (delta.enableChangeDataFeed = true)
+    """)
 
-spark.sql(f"""
-INSERT INTO {SOURCE_TABLE} VALUES
-    (1, 'Wireless Mouse', 29.99, 'Electronics', current_timestamp()),
-    (2, 'USB-C Adapter', 14.99, 'Accessories', current_timestamp()),
-    (3, 'Laptop Sleeve', 24.99, 'Accessories', current_timestamp()),
-    (4, 'Webcam HD', 59.99, 'Electronics', current_timestamp()),
-    (5, 'Desk Lamp', 34.99, 'Office', current_timestamp())
-""")
+    spark.sql(f"""
+    INSERT INTO {SOURCE_TABLE} VALUES
+        (1, 'Wireless Mouse', 29.99, 'Electronics', current_timestamp()),
+        (2, 'USB-C Adapter', 14.99, 'Accessories', current_timestamp()),
+        (3, 'Laptop Sleeve', 24.99, 'Accessories', current_timestamp()),
+        (4, 'Webcam HD', 59.99, 'Electronics', current_timestamp()),
+        (5, 'Desk Lamp', 34.99, 'Office', current_timestamp())
+    """)
+    print(f"✓ Sample data created in {SOURCE_TABLE}")
+else:
+    print(f"Using existing table: {SOURCE_TABLE}")
 
 display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 
@@ -164,5 +191,16 @@ print("✓ New rows added. Trigger a sync from Catalog Explorer → Synced Table
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`07_Backup_and_Recovery`** to explore point-in-time recovery and branch snapshots.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

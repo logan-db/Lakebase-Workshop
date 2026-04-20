@@ -22,7 +22,7 @@
 
 # COMMAND ----------
 
-import re, socket, subprocess, json, base64, psycopg
+import re, json, base64, psycopg
 from psycopg.rows import dict_row
 from databricks.sdk import WorkspaceClient
 
@@ -130,18 +130,6 @@ host = ep.status.hosts.host
 
 params = {"host": host, "dbname": "databricks_postgres",
           "user": user_email, "password": cred.token, "sslmode": "require"}
-try:
-    params["hostaddr"] = socket.gethostbyname(host)
-except Exception:
-    try:
-        r = subprocess.run(["dig", "+short", host], capture_output=True, text=True, timeout=5)
-        for line in r.stdout.strip().split("\n"):
-            if line.strip() and not line.startswith(";"):
-                params["hostaddr"] = line.strip()
-                break
-    except Exception:
-        pass
-
 conn = psycopg.connect(**params, row_factory=dict_row)
 print("✓ Connected")
 
@@ -290,5 +278,16 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Next
-# MAGIC Continue to **`03_Autoscaling_and_Compute`** to explore compute sizing and scale-to-zero.
+# MAGIC ## What's Next?
+# MAGIC
+# MAGIC Continue to another lab path:
+# MAGIC
+# MAGIC | Path | Folder | What You'll Learn |
+# MAGIC |------|--------|-------------------|
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
