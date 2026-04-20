@@ -22,21 +22,13 @@
 
 # COMMAND ----------
 
-import re, json, base64, psycopg
-from psycopg.rows import dict_row
-from databricks.sdk import WorkspaceClient
+# MAGIC %run ../_setup
 
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
+# COMMAND ----------
 
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
+import json, base64
 
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-ENDPOINT_NAME = f"projects/{PROJECT_ID}/branches/production/endpoints/primary"
-print(f"Project:  {PROJECT_ID}")
-print(f"User:     {user_email}")
+ENDPOINT_NAME = get_endpoint_name()
 
 # COMMAND ----------
 

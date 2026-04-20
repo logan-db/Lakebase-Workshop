@@ -21,19 +21,12 @@
 
 # COMMAND ----------
 
-import re, time, psycopg
-from databricks.sdk import WorkspaceClient
+# MAGIC %run ../_setup
+
+# COMMAND ----------
+
+import time
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
-
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-print(f"Project: {PROJECT_ID}")
 
 # COMMAND ----------
 
@@ -90,21 +83,9 @@ except Exception as e:
 
 # COMMAND ----------
 
-def connect_to_branch(project_id, branch_id):
-    endpoints = list(w.postgres.list_endpoints(
-        parent=f"projects/{project_id}/branches/{branch_id}"
-    ))
-    ep = w.postgres.get_endpoint(name=endpoints[0].name)
-    host = ep.status.hosts.host
-    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-
-    params = {"host": host, "dbname": "databricks_postgres",
-              "user": w.current_user.me().user_name, "password": cred.token, "sslmode": "require"}
-    return psycopg.connect(**params)
-
 print("Waiting for dev branch endpoint to activate...")
-time.sleep(10)  # Give endpoint a moment to start
-conn = connect_to_branch(PROJECT_ID, DEV_BRANCH)
+time.sleep(10)
+conn = get_connection(DEV_BRANCH)
 print("✓ Connected to dev branch")
 
 # COMMAND ----------
@@ -153,7 +134,7 @@ with conn.cursor(row_factory=dict_row) as cur:
     cur.execute("SELECT count(*) as cnt FROM demo.reviews")
     print(f"Dev branch — reviews count: {cur.fetchone()['cnt']}")
 
-prod_conn = connect_to_branch(PROJECT_ID, "production")
+prod_conn = get_connection("production")
 with prod_conn.cursor() as cur:
     try:
         cur.execute("SELECT 1 FROM demo.reviews LIMIT 1")

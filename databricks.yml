@@ -6,6 +6,11 @@ sync:
     - "notebooks/**"
     - "labs/**"
     - "bootstrap/seed.sql"
+    - "apps/lakebase-lab-console/frontend/dist/**"
+  exclude:
+    - "apps/**/node_modules/**"
+    - "apps/**/.venv/**"
+    - "apps/**/__pycache__/**"
 
 resources:
   apps:

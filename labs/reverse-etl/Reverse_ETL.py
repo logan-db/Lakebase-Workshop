@@ -26,23 +26,12 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install "databricks-sdk>=0.81.0" --quiet
+# MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import re
-from databricks.sdk import WorkspaceClient
-
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-print(f"Project: {PROJECT_ID}")
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -55,8 +44,8 @@ print(f"Project: {PROJECT_ID}")
 
 # COMMAND ----------
 
-UC_CATALOG = "main"
-UC_SCHEMA  = f"lakebase_lab_{sanitize(user_email)}"
+UC_CATALOG = "main"  # point to your own catalog
+UC_SCHEMA  = f"lakebase_lab_{_sanitize(user_email).replace('-', '_')}"
 
 USE_OWN_DATA = False
 
@@ -126,14 +115,14 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 
 # COMMAND ----------
 
-PRIMARY_KEY_COLUMNS = ["product_id"]
-
 from databricks.sdk.service.database import (
     SyncedDatabaseTable,
     SyncedTableSpec,
     NewPipelineSpec,
     SyncedTableSchedulingPolicy,
 )
+
+PRIMARY_KEY_COLUMNS = ["product_id"]
 
 synced_table = w.database.create_synced_database_table(
     SyncedDatabaseTable(
@@ -149,7 +138,6 @@ synced_table = w.database.create_synced_database_table(
         ),
     )
 )
-
 print(f"✓ Synced table created: {synced_table.name}")
 
 # COMMAND ----------
@@ -161,7 +149,7 @@ print(f"✓ Synced table created: {synced_table.name}")
 
 status = w.database.get_synced_database_table(name=SYNCED_TABLE)
 print(f"State:   {status.data_synchronization_status.detailed_state}")
-print(f"Message: {status.data_synchronization_status.message}")
+print(f"Message: {status.data_synchronization_status.message or 'N/A'}")
 
 # COMMAND ----------
 

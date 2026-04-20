@@ -4,10 +4,9 @@ Sync Delta Lake tables from the Lakehouse into Lakebase for low-latency serving.
 
 ## Labs
 
-| Order | Lab | What You'll Learn |
-|-------|-----|-------------------|
-| 1 | `Reverse_ETL` | Set up a synced table, monitor sync status, observe incremental changes |
-| 2 | `create_synced_table` | Minimal standalone reference for synced table setup |
+| Lab | What You'll Learn |
+|-----|-------------------|
+| `Reverse_ETL` | Create a Delta source table (or use your own), set up a synced table, monitor sync status, observe incremental changes |
 
 ## Prerequisites
 

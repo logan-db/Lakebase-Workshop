@@ -24,29 +24,9 @@
 
 # COMMAND ----------
 
-import re, psycopg
-from psycopg.rows import dict_row
-from databricks.sdk import WorkspaceClient
+# MAGIC %run ../_setup
 
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-
-def get_connection():
-    endpoints = list(w.postgres.list_endpoints(
-        parent=f"projects/{PROJECT_ID}/branches/production"
-    ))
-    ep = w.postgres.get_endpoint(name=endpoints[0].name)
-    host = ep.status.hosts.host
-    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-    params = {"host": host, "dbname": "databricks_postgres",
-              "user": user_email, "password": cred.token, "sslmode": "require"}
-    return psycopg.connect(**params, row_factory=dict_row)
+# COMMAND ----------
 
 conn = get_connection()
 print(f"✓ Connected to {PROJECT_ID} / production")
