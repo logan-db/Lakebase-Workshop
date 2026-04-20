@@ -3,6 +3,7 @@ import { api } from './api'
 import Dashboard from './pages/Dashboard'
 import BranchManager from './pages/BranchManager'
 import ComputePage from './pages/ComputePage'
+import AutoscaleDemo from './pages/AutoscaleDemo'
 import LoadTestPage from './pages/LoadTestPage'
 import DataPlayground from './pages/DataPlayground'
 import SyncStatus from './pages/SyncStatus'
@@ -11,9 +12,9 @@ import AgentMemory from './pages/AgentMemory'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: '\u25C8', section: 'overview' },
+  { id: 'autoscale', label: 'Autoscale Demo', icon: '\uD83D\uDCC8', section: 'overview' },
   { id: 'branches', label: 'Branches', icon: '\u2442', section: 'manage' },
-  { id: 'compute', label: 'Autoscaling', icon: '\u26A1', section: 'manage' },
-  { id: 'loadtest', label: 'Load Test', icon: '\uD83D\uDE80', section: 'manage' },
+  { id: 'compute', label: 'Compute Config', icon: '\u26A1', section: 'manage' },
   { id: 'data', label: 'Data Ops', icon: '\uD83D\uDDC3', section: 'data' },
   { id: 'sync', label: 'Reverse ETL', icon: '\uD83D\uDD04', section: 'data' },
   { id: 'agent', label: 'Agent Memory', icon: '\uD83E\uDD16', section: 'data' },
@@ -40,6 +41,7 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard': return <Dashboard onNavigate={setActivePage} />
+      case 'autoscale': return <AutoscaleDemo />
       case 'branches': return <BranchManager />
       case 'compute': return <ComputePage />
       case 'loadtest': return <LoadTestPage />
