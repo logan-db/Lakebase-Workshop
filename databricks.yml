@@ -1,0 +1,27 @@
+bundle:
+  name: lakebase-workshop
+
+sync:
+  include:
+    - "notebooks/**"
+    - "labs/**"
+    - "bootstrap/seed.sql"
+
+resources:
+  apps:
+    lakebase_lab_console:
+      name: lakebase-lab-console
+      description: "Lakebase Lab Console — Interactive workshop app"
+      source_code_path: ./apps/lakebase-lab-console
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      profile: dev
+
+  workshop:
+    mode: production
+    workspace:
+      profile: dev

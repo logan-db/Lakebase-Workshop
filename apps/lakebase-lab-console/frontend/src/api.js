@@ -1,0 +1,58 @@
+const BASE = '';
+
+async function request(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || JSON.stringify(err));
+  }
+  return res.json();
+}
+
+export const api = {
+  // Health & config
+  health: () => request('/api/health'),
+  config: () => request('/api/config'),
+  dbtest: () => request('/api/dbtest'),
+
+  // Branches
+  listBranches: () => request('/api/branches'),
+  getBranch: (id) => request(`/api/branches/${id}`),
+  createBranch: (data) => request('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
+  deleteBranch: (id) => request(`/api/branches/${id}`, { method: 'DELETE' }),
+
+  // Compute
+  listEndpoints: (branchId) => request(`/api/compute/${branchId}`),
+  updateCompute: (branchId, endpointId, data) =>
+    request(`/api/compute/${branchId}/${endpointId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Load test
+  startLoadTest: (data) => request('/api/loadtest/start', { method: 'POST', body: JSON.stringify(data) }),
+  stopLoadTest: (id) => request(`/api/loadtest/stop/${id}`, { method: 'POST' }),
+  loadTestStatus: (id) => request(`/api/loadtest/status/${id}`),
+
+  // Data
+  listProducts: (cat) => request(`/api/data/products${cat ? `?category=${cat}` : ''}`),
+  createProduct: (data) => request('/api/data/products', { method: 'POST', body: JSON.stringify(data) }),
+  deleteProduct: (id) => request(`/api/data/products/${id}`, { method: 'DELETE' }),
+  listEvents: (type) => request(`/api/data/events${type ? `?event_type=${type}` : ''}`),
+  createEvent: (data) => request('/api/data/events', { method: 'POST', body: JSON.stringify(data) }),
+  clearLoadtestEvents: () => request('/api/data/events/loadtest', { method: 'DELETE' }),
+  listAudit: (table) => request(`/api/data/audit${table ? `?table_name=${table}` : ''}`),
+  tableStats: () => request('/api/data/stats'),
+
+  // Agent memory
+  listSessions: () => request('/api/agent/sessions'),
+  createSession: (data) => request('/api/agent/sessions', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSession: (id) => request(`/api/agent/sessions/${id}`, { method: 'DELETE' }),
+  getMessages: (id) => request(`/api/agent/sessions/${id}/messages`),
+  appendMessage: (id, data) =>
+    request(`/api/agent/sessions/${id}/messages`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Generic (for API tester)
+  raw: (method, path, body) =>
+    request(path, { method, body: body ? JSON.stringify(body) : undefined }),
+};

@@ -1,0 +1,21 @@
+command:
+  - "python"
+  - "-m"
+  - "uvicorn"
+  - "app:app"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8000"
+
+env:
+  - name: LAKEBASE_PROJECT_ID
+    value: "<your-project-id>"
+  - name: LAKEBASE_BRANCH_ID
+    value: "production"
+  - name: LAKEBASE_SCHEMA
+    value: "demo"
+
+resources:
+  - name: postgres
+    type: postgres
