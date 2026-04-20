@@ -16,24 +16,16 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install "databricks-sdk>=0.81.0" --quiet
+# MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import re
-from databricks.sdk import WorkspaceClient
+# MAGIC %run ../_setup
+
+# COMMAND ----------
+
 from databricks.sdk.service.postgres import Endpoint, EndpointSpec, FieldMask
-
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-print(f"Project: {PROJECT_ID}")
 
 # COMMAND ----------
 

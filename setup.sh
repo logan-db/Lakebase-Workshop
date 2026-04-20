@@ -217,7 +217,7 @@ echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━�
 echo -e "${BOLD}${GREEN}  You're all set! Choose how to deploy:${RESET}"
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
-echo -e "  ${BOLD}Option A: Deploy as a Databricks Asset Bundle (recommended)${RESET}"
+echo -e "  ${BOLD}Option A: Deploy as a Declarative Automation Bundle (recommended)${RESET}"
 echo -e "  ${DIM}Deploys everything — foundation, labs, and the Lab Console app:${RESET}"
 echo ""
 echo -e "    ${CYAN}databricks bundle deploy --target dev --profile $PROFILE${RESET}"

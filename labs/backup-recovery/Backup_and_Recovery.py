@@ -22,20 +22,12 @@
 
 # COMMAND ----------
 
-import re, time, psycopg
-from psycopg.rows import dict_row
-from databricks.sdk import WorkspaceClient
+# MAGIC %run ../_setup
+
+# COMMAND ----------
+
+import time
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
-
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-print(f"Project: {PROJECT_ID}")
 
 # COMMAND ----------
 
@@ -117,20 +109,9 @@ except Exception as e:
 
 # COMMAND ----------
 
-def connect_to_branch(branch_id):
-    endpoints = list(w.postgres.list_endpoints(
-        parent=f"projects/{PROJECT_ID}/branches/{branch_id}"
-    ))
-    ep = w.postgres.get_endpoint(name=endpoints[0].name)
-    host = ep.status.hosts.host
-    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-    params = {"host": host, "dbname": "databricks_postgres",
-              "user": user_email, "password": cred.token, "sslmode": "require"}
-    return psycopg.connect(**params, row_factory=dict_row)
-
 print("Waiting for work branch endpoint...")
 time.sleep(10)
-work_conn = connect_to_branch(WORK_BRANCH)
+work_conn = get_connection(WORK_BRANCH)
 print("✓ Connected to work branch")
 
 # COMMAND ----------
@@ -198,7 +179,7 @@ except Exception as e:
 
 print("Waiting for recovery branch endpoint...")
 time.sleep(10)
-recovery_conn = connect_to_branch(RECOVERY_BRANCH)
+recovery_conn = get_connection(RECOVERY_BRANCH)
 
 with recovery_conn.cursor() as cur:
     cur.execute("SELECT count(*) AS cnt FROM demo.products")

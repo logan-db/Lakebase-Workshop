@@ -59,7 +59,7 @@ After completing the foundation, pick any path based on your interest. Each path
 | # | Path | Folder | Labs | Description |
 |---|------|--------|------|-------------|
 | 1 | **Data Operations** | `labs/data-operations/` | Data Operations, Advanced SQL | CRUD, JSONB, arrays, triggers, transactions |
-| 2 | **Reverse ETL** | `labs/reverse-etl/` | Reverse ETL, Synced Table | Sync Delta Lake tables into Lakebase |
+| 2 | **Reverse ETL** | `labs/reverse-etl/` | Reverse ETL | Sync Delta Lake tables into Lakebase |
 | 3 | **Development Experience** | `labs/development-experience/` | Branches, Autoscaling | Branching, CU sizing, scale-to-zero |
 | 4 | **Observability** | `labs/observability/` | Observability & Monitoring | pg_stat views, index analysis, monitoring |
 | 5 | **Authentication** | `labs/authentication/` | Auth & Permissions | OAuth tokens, roles, two-layer permissions |
@@ -97,7 +97,17 @@ No prior Databricks CLI setup is needed. The script handles everything.
 
 After setup completes, choose one of these paths:
 
-**Option A: Upload notebooks from the CLI**
+**Option A: Deploy as a Declarative Automation Bundle (recommended)**
+
+```bash
+# From the repo root:
+databricks bundle deploy --target dev --profile lakebase-workshop
+```
+
+Then in the Databricks UI, find your content at:
+**Workspace → Users → `<your-email>` → .bundle → lakebase-workshop → dev → files**
+
+**Option B: Upload from the CLI**
 
 ```bash
 # Create the workspace folder
@@ -123,16 +133,6 @@ for nb in labs/**/*.py; do
     --overwrite --profile lakebase-workshop
 done
 ```
-
-**Option B: Deploy everything as a Databricks Asset Bundle**
-
-```bash
-# From the repo root:
-databricks bundle deploy --target dev --profile lakebase-workshop
-```
-
-Then in the Databricks UI, find your content at:
-**Workspace → Users → `<your-email>` → .bundle → lakebase-workshop → dev → files**
 
 ### Step 3: Run the foundation
 
@@ -191,6 +191,7 @@ Lakebase-Workshop/
 ├── notebooks/                                  # Foundation (run first)
 │   └── 00_Setup_Lakebase_Project.py
 ├── labs/                                       # Lab paths (pick your adventure)
+│   ├── _setup.py                               # Shared setup (auto-loaded by each lab)
 │   ├── README.md                               # Path index
 │   ├── development-experience/                 # Branching + Autoscaling
 │   │   ├── Branches_and_Environments.py
@@ -199,8 +200,7 @@ Lakebase-Workshop/
 │   │   ├── Data_Operations.py
 │   │   └── Advanced_Postgres.sql
 │   ├── reverse-etl/                            # Synced tables from Delta
-│   │   ├── Reverse_ETL.py
-│   │   └── create_synced_table.py
+│   │   └── Reverse_ETL.py
 │   ├── observability/                          # pg_stat views, monitoring
 │   │   └── Observability_and_Monitoring.py
 │   ├── backup-recovery/                        # PITR, snapshots

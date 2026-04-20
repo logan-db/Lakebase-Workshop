@@ -31,7 +31,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Option A: Deploy from the CLI with Databricks Asset Bundles
+# MAGIC ## Option A: Deploy with a Declarative Automation Bundle
 # MAGIC
 # MAGIC From the **root of the cloned repo** on your laptop:
 # MAGIC

@@ -85,7 +85,15 @@ The script installs dependencies, authenticates the Databricks CLI, validates La
 
 ### 2. Deploy content to the workspace
 
-**Option A — Upload directly:**
+**Option A — Deploy as a Declarative Automation Bundle (recommended):**
+
+```bash
+databricks bundle deploy --target dev --profile lakebase-workshop
+```
+
+Content appears at: **Workspace → Users → `<email>` → .bundle → lakebase-workshop → dev → files**
+
+**Option B — Upload from the CLI:**
 
 ```bash
 databricks workspace mkdirs "/Workspace/Users/<email>/lakebase-workshop" --profile lakebase-workshop
@@ -109,14 +117,6 @@ for nb in labs/**/*.py; do
     --overwrite --profile lakebase-workshop
 done
 ```
-
-**Option B — Deploy as a bundle:**
-
-```bash
-databricks bundle deploy --target dev --profile lakebase-workshop
-```
-
-Content appears at: **Workspace → Users → `<email>` → .bundle → lakebase-workshop → dev → files**
 
 ### 3. Run the foundation
 

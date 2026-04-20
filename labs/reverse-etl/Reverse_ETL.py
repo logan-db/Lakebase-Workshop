@@ -26,23 +26,12 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install "databricks-sdk>=0.81.0" --quiet
+# MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import re
-from databricks.sdk import WorkspaceClient
-
-w = WorkspaceClient()
-user_email = w.current_user.me().user_name
-
-def sanitize(email):
-    name = email.split("@")[0]
-    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
-
-PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
-print(f"Project: {PROJECT_ID}")
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -56,7 +45,7 @@ print(f"Project: {PROJECT_ID}")
 # COMMAND ----------
 
 UC_CATALOG = "main"
-UC_SCHEMA  = f"lakebase_lab_{sanitize(user_email)}"
+UC_SCHEMA  = f"lakebase_lab_{_sanitize(user_email)}"
 
 USE_OWN_DATA = False
 
