@@ -120,8 +120,13 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 # MAGIC ## 2. Create the Synced Table
 # MAGIC This sets up a pipeline that continuously (or on trigger) pushes Delta
 # MAGIC changes into the Lakebase PostgreSQL branch.
+# MAGIC
+# MAGIC **Using your own data?** Update `PRIMARY_KEY_COLUMNS` below to match
+# MAGIC your table's primary key.
 
 # COMMAND ----------
+
+PRIMARY_KEY_COLUMNS = ["product_id"]
 
 from databricks.sdk.service.database import (
     SyncedDatabaseTable,
@@ -135,7 +140,7 @@ synced_table = w.database.create_synced_database_table(
         name=SYNCED_TABLE,
         spec=SyncedTableSpec(
             source_table_full_name=SOURCE_TABLE,
-            primary_key_columns=["product_id"],
+            primary_key_columns=PRIMARY_KEY_COLUMNS,
             scheduling_policy=SyncedTableSchedulingPolicy.TRIGGERED,
             new_pipeline_spec=NewPipelineSpec(
                 storage_catalog=UC_CATALOG,
@@ -164,16 +169,23 @@ print(f"Message: {status.data_synchronization_status.message}")
 # MAGIC ## 4. Update Source & Trigger Re-sync
 # MAGIC Add rows to the Delta table, then trigger the pipeline again to see
 # MAGIC Reverse ETL push the changes to Lakebase.
+# MAGIC
+# MAGIC **Using your own data?** Make a change to your source table (insert, update,
+# MAGIC or delete), then trigger a sync from Catalog Explorer → Synced Tables tab.
 
 # COMMAND ----------
 
-spark.sql(f"""
-INSERT INTO {SOURCE_TABLE} VALUES
-    (6, 'Standing Desk', 299.99, 'Office', current_timestamp()),
-    (7, 'Monitor Arm', 89.99, 'Accessories', current_timestamp())
-""")
+if not USE_OWN_DATA:
+    spark.sql(f"""
+    INSERT INTO {SOURCE_TABLE} VALUES
+        (6, 'Standing Desk', 299.99, 'Office', current_timestamp()),
+        (7, 'Monitor Arm', 89.99, 'Accessories', current_timestamp())
+    """)
+    print("✓ New rows added to sample table.")
+else:
+    print("Make a change to your source table, then trigger a re-sync.")
 
-print("✓ New rows added. Trigger a sync from Catalog Explorer → Synced Tables tab, or wait for the scheduled run.")
+print("Trigger a sync from Catalog Explorer → Synced Tables tab, or wait for the scheduled run.")
 
 # COMMAND ----------
 
@@ -182,7 +194,7 @@ print("✓ New rows added. Trigger a sync from Catalog Explorer → Synced Table
 # MAGIC
 # MAGIC If you plan to deploy the Lab Console app, its Service Principal needs
 # MAGIC explicit access to synced tables. Connect to Lakebase with `psql` or
-# MAGIC notebook `03` and run:
+# MAGIC the Authentication lab and run:
 # MAGIC
 # MAGIC ```sql
 # MAGIC GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
