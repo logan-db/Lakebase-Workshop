@@ -187,7 +187,7 @@ Lakebase Autoscaling (PostgreSQL)
 ```
 Lakebase-Workshop/
 ├── setup.sh                                    # ← Start here
-├── databricks.yml                              # DAB bundle config
+├── databricks.yml                              # Bundle config
 ├── notebooks/                                  # Foundation (run first)
 │   └── 00_Setup_Lakebase_Project.py
 ├── labs/                                       # Lab paths (pick your adventure)
