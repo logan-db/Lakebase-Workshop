@@ -14,6 +14,14 @@
 # MAGIC 5. View database statistics and index usage
 # MAGIC
 # MAGIC **Run `00_Setup_Lakebase_Project` first.**
+# MAGIC
+# MAGIC ### Running SQL against Lakebase
+# MAGIC
+# MAGIC The SQL in this lab can be executed from:
+# MAGIC
+# MAGIC - **This notebook** — uses `psycopg` to connect via the Databricks SDK (run the cells below)
+# MAGIC - **Lakebase SQL Editor** — open the SQL editor in the Databricks UI for your Lakebase instance and run queries directly
+# MAGIC - **psql / any PostgreSQL client** — connect with your endpoint host and credentials
 
 # COMMAND ----------
 

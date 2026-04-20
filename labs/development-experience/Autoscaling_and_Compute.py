@@ -25,7 +25,7 @@
 
 # COMMAND ----------
 
-from databricks.sdk.service.postgres import Endpoint, EndpointSpec, FieldMask
+from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
 
 # COMMAND ----------
 
@@ -87,6 +87,7 @@ for ep_summary in endpoints:
 #     endpoint=Endpoint(
 #         name=ep_name,
 #         spec=EndpointSpec(
+#             endpoint_type=EndpointType.ENDPOINT_TYPE_READ_WRITE,
 #             autoscaling_limit_min_cu=NEW_MIN,
 #             autoscaling_limit_max_cu=NEW_MAX,
 #         ),

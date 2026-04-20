@@ -115,32 +115,32 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 
 # COMMAND ----------
 
-from databricks.sdk.service.database import (
-    SyncedDatabaseTable,
-    SyncedTableSpec,
+from databricks.sdk.service.postgres import (
+    SyncedTable,
+    SyncedTableSyncedTableSpec,
+    SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy,
     NewPipelineSpec,
-    SyncedTableSchedulingPolicy,
 )
 
 PRIMARY_KEY_COLUMNS = ["product_id"]
 
-synced_table = w.database.create_synced_database_table(
-    SyncedDatabaseTable(
-        name=SYNCED_TABLE,
-        project_name=f"projects/{PROJECT_ID}",
-        branch_name=f"projects/{PROJECT_ID}/branches/production",
-        spec=SyncedTableSpec(
+synced_table = w.postgres.create_synced_table(
+    synced_table=SyncedTable(
+        spec=SyncedTableSyncedTableSpec(
+            branch=f"projects/{PROJECT_ID}/branches/production",
+            postgres_database="databricks_postgres",
             source_table_full_name=SOURCE_TABLE,
             primary_key_columns=PRIMARY_KEY_COLUMNS,
-            scheduling_policy=SyncedTableSchedulingPolicy.TRIGGERED,
+            scheduling_policy=SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy.TRIGGERED,
             new_pipeline_spec=NewPipelineSpec(
                 storage_catalog=UC_CATALOG,
                 storage_schema=UC_SCHEMA,
             ),
         ),
-    )
+    ),
+    synced_table_id=SYNCED_TABLE,
 )
-print(f"✓ Synced table created: {synced_table.name}")
+print(f"✓ Synced table created: {SYNCED_TABLE}")
 
 # COMMAND ----------
 
@@ -149,9 +149,9 @@ print(f"✓ Synced table created: {synced_table.name}")
 
 # COMMAND ----------
 
-status = w.database.get_synced_database_table(name=SYNCED_TABLE)
-print(f"State:   {status.data_synchronization_status.detailed_state}")
-print(f"Message: {status.data_synchronization_status.message or 'N/A'}")
+status = w.postgres.get_synced_table(name=f"synced_tables/{SYNCED_TABLE}")
+print(f"State:   {status.status.detailed_state}")
+print(f"Message: {status.status.message or 'N/A'}")
 
 # COMMAND ----------
 

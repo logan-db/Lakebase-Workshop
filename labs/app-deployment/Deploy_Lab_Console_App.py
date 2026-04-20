@@ -24,50 +24,26 @@
 # MAGIC %md
 # MAGIC ## Prerequisites
 # MAGIC
-# MAGIC 1. **Notebook `00` was run** — your Lakebase project exists
-# MAGIC 2. **The frontend is built** — `build.sh` was run locally (see below)
-# MAGIC 3. **Databricks CLI** is authenticated to this workspace
+# MAGIC 1. **`setup.sh` was run** — this deploys all notebooks, labs, and the Lab Console app via a Databricks Asset Bundle
+# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists and the demo schema is seeded
+# MAGIC 3. **Lakebase database added as app resource** — after notebook 00, add the postgres resource to the app
+# MAGIC    (Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Option A: Deploy with a Declarative Automation Bundle
+# MAGIC ## Deployment
 # MAGIC
-# MAGIC From the **root of the cloned repo** on your laptop:
+# MAGIC If you ran `setup.sh` and chose **Yes** when prompted to deploy, the Lab Console
+# MAGIC app is already deployed to your workspace via the Declarative Automation Bundle.
+# MAGIC
+# MAGIC To redeploy or deploy manually, run from the **repo root**:
 # MAGIC
 # MAGIC ```bash
-# MAGIC # 1. Build the React frontend
-# MAGIC cd apps/lakebase-lab-console
-# MAGIC bash build.sh
-# MAGIC
-# MAGIC # 2. Go back to the repo root (where databricks.yml lives)
-# MAGIC cd ../..
-# MAGIC
-# MAGIC # 3. Deploy the bundle
 # MAGIC databricks bundle deploy --target dev
-# MAGIC
-# MAGIC # 4. Open the app in the Databricks UI:
-# MAGIC #    Workspace → Apps → lakebase-lab-console
 # MAGIC ```
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Option B: Deploy from the Databricks Apps UI
 # MAGIC
-# MAGIC 1. Go to **Workspace → Apps → Create App**
-# MAGIC 2. Name it `lakebase-lab-console`
-# MAGIC 3. Under **Resources**, add your Lakebase database (the `PG*` env vars
-# MAGIC    will be injected automatically)
-# MAGIC 4. Set these **Environment Variables**:
-# MAGIC
-# MAGIC | Variable | Value |
-# MAGIC |----------|-------|
-# MAGIC | `LAKEBASE_PROJECT_ID` | *(output from notebook 00)* |
-# MAGIC | `DATABRICKS_HOST` | *(your workspace URL)* |
-# MAGIC
-# MAGIC 5. Upload the `apps/lakebase-lab-console` folder as the source code
-# MAGIC 6. Click **Deploy**
+# MAGIC Then open the app: **Compute → Apps → lakebase-lab-console**
 
 # COMMAND ----------
 
@@ -98,11 +74,33 @@
 # MAGIC ## Service Principal Permissions
 # MAGIC
 # MAGIC When the app deploys, Databricks creates a Service Principal (SP) to run it.
-# MAGIC You must grant this SP access to your Lakebase tables.
+# MAGIC You must create an OAuth-enabled Postgres role for the SP and grant it access
+# MAGIC to your Lakebase tables.
 # MAGIC
-# MAGIC 1. Find the SP's `client_id` in the **App details** page
-# MAGIC 2. Connect to Lakebase (e.g., using notebook `03` or psql)
-# MAGIC 3. Run:
+# MAGIC 1. Find the SP's `client_id` — the code cell below retrieves it automatically via the SDK,
+# MAGIC    or you can find it manually in the App Environment tab (`DATABRICKS_CLIENT_ID`)
+# MAGIC 2. Run the setup below to create the OAuth role and grant permissions
+# MAGIC
+# MAGIC ### Where to run the SQL
+# MAGIC
+# MAGIC You can execute these SQL statements from:
+# MAGIC
+# MAGIC - **Lakebase SQL Editor** — open the SQL editor in the Databricks UI for your Lakebase instance
+# MAGIC - **This notebook** — use the code cell below if you're connected to the Lakebase instance
+# MAGIC - **psql / any PostgreSQL client** — connect with your endpoint host and credentials
+# MAGIC
+# MAGIC ### Step 1: Create the OAuth role
+# MAGIC
+# MAGIC The `databricks_auth` extension enables OAuth authentication so the SP can
+# MAGIC connect using Databricks-managed tokens instead of passwords.
+# MAGIC See [Connect a Databricks App to Lakebase](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
+# MAGIC
+# MAGIC ```sql
+# MAGIC CREATE EXTENSION IF NOT EXISTS databricks_auth;
+# MAGIC SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');
+# MAGIC ```
+# MAGIC
+# MAGIC ### Step 2: Grant schema and object access
 # MAGIC
 # MAGIC ```sql
 # MAGIC GRANT ALL ON SCHEMA demo TO "<SP_CLIENT_ID>";
@@ -112,7 +110,62 @@
 # MAGIC   GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
 # MAGIC ```
 # MAGIC
+# MAGIC Both steps can be run from the **Lakebase SQL Editor**, **this notebook** (code cell below),
+# MAGIC or any PostgreSQL client connected to the instance.
+# MAGIC
+# MAGIC > **Troubleshooting:** If the app shows "password authentication failed" and the
+# MAGIC > Lakebase Roles UI shows **"No login"** for the SP, the OAuth role was not created
+# MAGIC > properly. Run `SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');`
+# MAGIC > to fix it.
+# MAGIC
 # MAGIC See `docs/PERMISSIONS.md` for the full permission model.
+
+# COMMAND ----------
+
+# MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
+# MAGIC dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Look up the SP client ID
+
+# COMMAND ----------
+
+APP_NAME = "lakebase-lab-console"
+
+app = w.apps.get(name=APP_NAME)
+sp = w.service_principals.get(id=app.service_principal_id)
+SP_CLIENT_ID = sp.application_id
+
+print(f"App:          {APP_NAME}")
+print(f"SP Name:      {sp.display_name}")
+print(f"SP Client ID: {SP_CLIENT_ID}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Create OAuth role and grant permissions
+
+# COMMAND ----------
+
+conn = get_connection()
+
+with conn.cursor() as cur:
+    cur.execute("CREATE EXTENSION IF NOT EXISTS databricks_auth")
+    cur.execute(f"SELECT databricks_create_role('{SP_CLIENT_ID}', 'service_principal')")
+    cur.execute(f'GRANT ALL ON SCHEMA demo TO "{SP_CLIENT_ID}"')
+    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA demo TO "{SP_CLIENT_ID}"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "{SP_CLIENT_ID}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA demo GRANT ALL ON TABLES TO "{SP_CLIENT_ID}"')
+conn.commit()
+conn.close()
+
+print(f"✓ Created OAuth role and granted schema permissions on demo to SP: {SP_CLIENT_ID}")
 
 # COMMAND ----------
 

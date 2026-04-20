@@ -249,8 +249,19 @@ with conn.cursor() as cur:
 # MAGIC %md
 # MAGIC ## 6. Identifying Slow Queries
 # MAGIC
-# MAGIC `pg_stat_statements` (if enabled) tracks cumulative query statistics.
-# MAGIC Let's check if it's available and query the top consumers.
+# MAGIC `pg_stat_statements` tracks cumulative query statistics.
+# MAGIC It requires a one-time extension setup, which we do below.
+# MAGIC
+# MAGIC > **Note:** Statistics are stored in memory and reset when compute
+# MAGIC > suspends (scale-to-zero) or restarts. For persistent history,
+# MAGIC > export results to a Delta table on a schedule.
+
+# COMMAND ----------
+
+with conn.cursor() as cur:
+    cur.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements;")
+    conn.commit()
+print("✓ pg_stat_statements extension enabled")
 
 # COMMAND ----------
 
