@@ -127,6 +127,8 @@ PRIMARY_KEY_COLUMNS = ["product_id"]
 synced_table = w.database.create_synced_database_table(
     SyncedDatabaseTable(
         name=SYNCED_TABLE,
+        project_name=f"projects/{PROJECT_ID}",
+        branch_name=f"projects/{PROJECT_ID}/branches/production",
         spec=SyncedTableSpec(
             source_table_full_name=SOURCE_TABLE,
             primary_key_columns=PRIMARY_KEY_COLUMNS,
