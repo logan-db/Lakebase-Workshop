@@ -59,12 +59,6 @@ if ! command -v pip3 &>/dev/null; then
   fi
 fi
 
-if command -v node &>/dev/null; then
-  ok "Node.js $(node -v)"
-else
-  warn "Node.js not found (needed to build the frontend). Install from https://nodejs.org"
-fi
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Install requirements
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,52 +195,48 @@ WORKSPACE_HOST=$WORKSPACE_HOST
 EOF
 ok "Config saved to .workshop-config"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. Done — show next steps
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Resolve the current user's email for workspace paths
+# Resolve the current user's email for workspace paths (used in later steps)
 USER_EMAIL=$(databricks current-user me --profile "$PROFILE" 2>/dev/null \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['userName'])" 2>/dev/null || echo "<your-email>")
 
 WORKSPACE_NOTEBOOK_DIR="/Workspace/Users/${USER_EMAIL}/lakebase-workshop"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Optional: Deploy everything to the workspace
+# ─────────────────────────────────────────────────────────────────────────────
+
+step "Deploy to workspace"
+info "This deploys notebooks, labs, and the Lab Console app to your workspace"
+info "using Databricks Asset Bundles."
 echo ""
+ask "Deploy now? (Y/n):"
+read -r DO_DEPLOY
+DO_DEPLOY="${DO_DEPLOY:-Y}"
+
+if [[ "$DO_DEPLOY" =~ ^[Yy] ]]; then
+  info "Deploying bundle..."
+  if databricks bundle deploy --target dev --profile "$PROFILE"; then
+    ok "Deployed to workspace"
+    echo ""
+    info "Find your content at:"
+    info "  /Workspace/Users/${USER_EMAIL}/.bundle/lakebase-workshop/dev/files/"
+    echo ""
+    info "After running notebook 00, add the postgres resource to the app:"
+    info "  Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database"
+  else
+    warn "Bundle deploy failed. You can retry manually:"
+    info "  databricks bundle deploy --target dev --profile $PROFILE"
+  fi
+else
+  info "Skipping deployment. You can deploy later with:"
+  info "  databricks bundle deploy --target dev --profile $PROFILE"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Done — show next steps
+# ─────────────────────────────────────────────────────────────────────────────
+
 echo ""
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${BOLD}${GREEN}  You're all set! Choose how to deploy:${RESET}"
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
-echo -e "  ${BOLD}Option A: Deploy as a Declarative Automation Bundle (recommended)${RESET}"
-echo -e "  ${DIM}Deploys everything — foundation, labs, and the Lab Console app:${RESET}"
-echo ""
-echo -e "    ${CYAN}databricks bundle deploy --target dev --profile $PROFILE${RESET}"
-echo ""
-echo -e "  Find your content at:"
-echo -e "  ${BOLD}/Workspace/Users/${USER_EMAIL}/.bundle/lakebase-workshop/dev/files/${RESET}"
-echo ""
-echo -e "  ${BOLD}Option B: Upload from the command line${RESET}"
-echo -e "  ${DIM}Push foundation + labs to your workspace:${RESET}"
-echo ""
-echo -e "    ${CYAN}databricks workspace mkdirs \"${WORKSPACE_NOTEBOOK_DIR}\" --profile $PROFILE${RESET}"
-echo ""
-echo -e "    ${CYAN}# Upload foundation${RESET}"
-echo -e "    ${CYAN}for nb in notebooks/*.py; do${RESET}"
-echo -e "    ${CYAN}  databricks workspace import \\${RESET}"
-echo -e "    ${CYAN}    \"${WORKSPACE_NOTEBOOK_DIR}/\$(basename \$nb)\" \\${RESET}"
-echo -e "    ${CYAN}    --file \"\$nb\" --format SOURCE --language PYTHON \\${RESET}"
-echo -e "    ${CYAN}    --overwrite --profile $PROFILE${RESET}"
-echo -e "    ${CYAN}done${RESET}"
-echo ""
-echo -e "    ${CYAN}# Upload lab paths${RESET}"
-echo -e "    ${CYAN}for nb in labs/**/*.py; do${RESET}"
-echo -e "    ${CYAN}  dir=\$(dirname \"\$nb\" | sed 's|labs/||')${RESET}"
-echo -e "    ${CYAN}  databricks workspace mkdirs \"${WORKSPACE_NOTEBOOK_DIR}/labs/\$dir\" --profile $PROFILE${RESET}"
-echo -e "    ${CYAN}  databricks workspace import \\${RESET}"
-echo -e "    ${CYAN}    \"${WORKSPACE_NOTEBOOK_DIR}/labs/\$dir/\$(basename \$nb)\" \\${RESET}"
-echo -e "    ${CYAN}    --file \"\$nb\" --format SOURCE --language PYTHON \\${RESET}"
-echo -e "    ${CYAN}    --overwrite --profile $PROFILE${RESET}"
-echo -e "    ${CYAN}done${RESET}"
 echo ""
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${BOLD}${GREEN}  Workshop Flow${RESET}"

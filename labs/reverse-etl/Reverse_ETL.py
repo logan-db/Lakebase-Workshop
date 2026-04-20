@@ -44,8 +44,8 @@
 
 # COMMAND ----------
 
-UC_CATALOG = "main"
-UC_SCHEMA  = f"lakebase_lab_{_sanitize(user_email)}"
+UC_CATALOG = "main"  # point to your own catalog
+UC_SCHEMA  = f"lakebase_lab_{_sanitize(user_email).replace('-', '_')}"
 
 USE_OWN_DATA = False
 
@@ -115,14 +115,14 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 
 # COMMAND ----------
 
-PRIMARY_KEY_COLUMNS = ["product_id"]
-
 from databricks.sdk.service.database import (
     SyncedDatabaseTable,
     SyncedTableSpec,
     NewPipelineSpec,
     SyncedTableSchedulingPolicy,
 )
+
+PRIMARY_KEY_COLUMNS = ["product_id"]
 
 synced_table = w.database.create_synced_database_table(
     SyncedDatabaseTable(
@@ -138,7 +138,6 @@ synced_table = w.database.create_synced_database_table(
         ),
     )
 )
-
 print(f"✓ Synced table created: {synced_table.name}")
 
 # COMMAND ----------
@@ -150,7 +149,7 @@ print(f"✓ Synced table created: {synced_table.name}")
 
 status = w.database.get_synced_database_table(name=SYNCED_TABLE)
 print(f"State:   {status.data_synchronization_status.detailed_state}")
-print(f"Message: {status.data_synchronization_status.message}")
+print(f"Message: {status.data_synchronization_status.message or 'N/A'}")
 
 # COMMAND ----------
 

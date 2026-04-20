@@ -89,56 +89,25 @@ The setup script walks you through:
 1. **Install requirements?** (Y/n) — installs `databricks-sdk`, `psycopg`, and checks for the Databricks CLI
 2. **Connect to your workspace** — enter your workspace URL or pick an existing profile. Opens your browser to authenticate.
 3. **Validate** — confirms Lakebase is available on your workspace
-4. **Next steps** — shows you exactly what to do next, including the workspace paths
+4. **Deploy now?** (Y/n) — deploys notebooks, labs, and the Lab Console app via Databricks Asset Bundles
+5. **Next steps** — shows you exactly what to do next
 
 No prior Databricks CLI setup is needed. The script handles everything.
 
-### Step 2: Deploy to your workspace
-
-After setup completes, choose one of these paths:
-
-**Option A: Deploy as a Declarative Automation Bundle (recommended)**
+If you skip the deploy step (or need to redeploy later), run:
 
 ```bash
-# From the repo root:
 databricks bundle deploy --target dev --profile lakebase-workshop
 ```
 
-Then in the Databricks UI, find your content at:
+Your content will be at:
 **Workspace → Users → `<your-email>` → .bundle → lakebase-workshop → dev → files**
 
-**Option B: Upload from the CLI**
-
-```bash
-# Create the workspace folder
-databricks workspace mkdirs "/Workspace/Users/<your-email>/lakebase-workshop" \
-  --profile lakebase-workshop
-
-# Upload foundation notebook
-for nb in notebooks/*.py; do
-  databricks workspace import \
-    "/Workspace/Users/<your-email>/lakebase-workshop/$(basename $nb)" \
-    --file "$nb" --format SOURCE --language PYTHON \
-    --overwrite --profile lakebase-workshop
-done
-
-# Upload lab paths
-for nb in labs/**/*.py; do
-  dir=$(dirname "$nb" | sed 's|labs/||')
-  databricks workspace mkdirs "/Workspace/Users/<your-email>/lakebase-workshop/labs/$dir" \
-    --profile lakebase-workshop
-  databricks workspace import \
-    "/Workspace/Users/<your-email>/lakebase-workshop/labs/$dir/$(basename $nb)" \
-    --file "$nb" --format SOURCE --language PYTHON \
-    --overwrite --profile lakebase-workshop
-done
-```
-
-### Step 3: Run the foundation
+### Step 2: Run the foundation
 
 Open **`00_Setup_Lakebase_Project`** and click **Run All**. It creates your Lakebase project, waits for the endpoint, and seeds the demo schema.
 
-### Step 4: Pick a path
+### Step 3: Pick a path
 
 Browse the paths in `labs/` and pick whichever interests you. Each lab notebook is self-contained — it installs its own dependencies and derives the project ID automatically.
 
@@ -212,9 +181,10 @@ Lakebase-Workshop/
 │   └── app-deployment/                         # Lab Console (capstone)
 │       └── Deploy_Lab_Console_App.py
 ├── apps/lakebase-lab-console/                  # Lab Console app
+│   ├── app.yaml                                # Databricks Apps config
+│   ├── app.py                                  # FastAPI entry point
 │   ├── backend/                                # FastAPI routes & connection manager
-│   ├── frontend/                               # React (Vite) UI
-│   └── app.yaml                                # Databricks Apps config
+│   └── frontend/                               # React (Vite) UI
 ├── bootstrap/
 │   ├── seed.sql                                # Demo schema DDL (used by notebook 00)
 │   └── requirements.txt                        # Python deps for local use

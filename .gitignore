@@ -7,12 +7,10 @@ env/
 venv/
 .venv/
 *.egg-info/
-dist/
 build/
 .eggs/
 
 node_modules/
-apps/lakebase-lab-console/frontend/dist/
 
 *.env
 .env.local

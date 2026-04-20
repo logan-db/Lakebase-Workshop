@@ -8,9 +8,9 @@ for branch management, compute, load testing, CRUD, and agent memory.
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.routes_branches import router as branches_router
@@ -39,22 +39,23 @@ app.include_router(loadtest_router)
 app.include_router(data_router)
 app.include_router(agent_router)
 
+STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
+
 
 @app.get("/api/health")
 def health():
-    """Health check endpoint."""
     project_id = os.getenv("LAKEBASE_PROJECT_ID", "NOT SET")
     pghost = os.getenv("PGHOST", "NOT SET")
     return {
         "status": "ok",
         "project_id": project_id,
         "pghost": pghost,
+        "frontend_built": STATIC_DIR.exists(),
     }
 
 
 @app.get("/api/config")
 def get_config():
-    """Return non-sensitive configuration for the frontend."""
     return {
         "project_id": os.getenv("LAKEBASE_PROJECT_ID", ""),
         "branch_id": os.getenv("LAKEBASE_BRANCH_ID", "production"),
@@ -66,7 +67,6 @@ def get_config():
 
 @app.get("/api/dbtest")
 def db_test():
-    """Test database connectivity."""
     try:
         from backend.db import execute_query
         result = execute_query("SELECT version() as version, current_database() as db")
@@ -75,16 +75,16 @@ def db_test():
         return {"db_connected": False, "error": str(e)}
 
 
-# Serve React frontend (built static files)
-STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
-
+# Serve the pre-built React SPA from frontend/dist/.
+# The frontend must be built before deployment (npm run build).
 if STATIC_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        """Serve the React SPA for all non-API routes."""
         file_path = STATIC_DIR / full_path
-        if file_path.exists() and file_path.is_file():
+        if full_path and file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(STATIC_DIR / "index.html")

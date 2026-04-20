@@ -10,12 +10,13 @@ command:
 
 env:
   - name: LAKEBASE_PROJECT_ID
-    value: "<your-project-id>"
+    # >>> Set this to YOUR project ID from notebook 00 output <<<
+    value: "lakebase-lab-logan-rupert"
   - name: LAKEBASE_BRANCH_ID
     value: "production"
   - name: LAKEBASE_SCHEMA
     value: "demo"
 
 resources:
-  - name: postgres
+  - name: lakebase-db
     type: postgres
