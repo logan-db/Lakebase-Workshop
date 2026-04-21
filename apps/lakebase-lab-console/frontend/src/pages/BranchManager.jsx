@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { GitBranch, Plus, Trash2, AlertCircle, X, Shield, Clock, Check, RefreshCw } from '../icons'
 
 export default function BranchManager() {
   const [branches, setBranches] = useState([])
@@ -54,22 +55,32 @@ export default function BranchManager() {
       </div>
 
       {error && (
-        <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 16 }}>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>Dismiss</button>
+        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
+            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
       <div className="card">
         <div className="card-header">
-          <h3>Branches ({branches.length})</h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
-            + New Branch
-          </button>
+          <h3><GitBranch size={16} /> Branches ({branches.length})</h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm btn-icon" onClick={load}>
+              <RefreshCw size={14} />
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
+              <Plus size={14} /> New Branch
+            </button>
+          </div>
         </div>
 
         {showCreate && (
-          <form onSubmit={handleCreate} style={{ marginBottom: 20, padding: 16, background: 'var(--bg-primary)', borderRadius: 'var(--radius)' }}>
+          <form onSubmit={handleCreate} style={{ marginBottom: 20, padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
             <div className="form-row">
               <div className="form-group">
                 <label>Branch ID (must start with lab-)</label>
@@ -100,17 +111,23 @@ export default function BranchManager() {
                 max={720}
               />
             </div>
-            <button className="btn btn-primary" disabled={creating}>
-              {creating ? 'Creating...' : 'Create Branch'}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" disabled={creating}>
+                <Check size={14} />
+                {creating ? 'Creating...' : 'Create Branch'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
+                Cancel
+              </button>
+            </div>
           </form>
         )}
 
         {loading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>Loading branches...</p>
+          <div className="empty-state" style={{ padding: 20 }}><p>Loading branches...</p></div>
         ) : branches.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">⑂</div>
+            <div className="empty-icon"><GitBranch size={36} /></div>
             <p>No branches found. Is LAKEBASE_PROJECT_ID configured?</p>
           </div>
         ) : (
@@ -122,27 +139,42 @@ export default function BranchManager() {
                 <th>Default</th>
                 <th>Protected</th>
                 <th>Expires</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {branches.map((b) => (
                 <tr key={b.branch_id}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{b.branch_id}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <GitBranch size={14} style={{ color: 'var(--text-muted)' }} />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{b.branch_id}</span>
+                    </div>
+                  </td>
                   <td>
                     <span className={`badge ${b.state?.includes('ACTIVE') ? 'badge-success' : 'badge-warning'}`}>
                       {b.state || 'unknown'}
                     </span>
                   </td>
-                  <td>{b.is_default ? 'Yes' : ''}</td>
-                  <td>{b.is_protected ? 'Yes' : ''}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {b.expire_time && b.expire_time !== 'None' ? b.expire_time : '--'}
+                  <td>
+                    {b.is_default && <Check size={14} style={{ color: 'var(--success)' }} />}
                   </td>
                   <td>
+                    {b.is_protected && <Shield size={14} style={{ color: 'var(--warning)' }} />}
+                  </td>
+                  <td>
+                    {b.expire_time && b.expire_time !== 'None' ? (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Clock size={12} /> {b.expire_time}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>--</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
                     {b.branch_id.startsWith('lab-') && (
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(b.branch_id)}>
-                        Delete
+                      <button className="btn btn-danger btn-xs" onClick={() => handleDelete(b.branch_id)}>
+                        <Trash2 size={12} /> Delete
                       </button>
                     )}
                   </td>
@@ -154,8 +186,10 @@ export default function BranchManager() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 8 }}>How Branching Works</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+        <div className="card-header">
+          <h3>How Branching Works</h3>
+        </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 14, lineHeight: 1.7 }}>
           Lakebase branches use <strong>copy-on-write</strong> storage. Creating a branch is instant
           and doesn't duplicate data. Changes on a branch are isolated until you manually promote them.
         </p>

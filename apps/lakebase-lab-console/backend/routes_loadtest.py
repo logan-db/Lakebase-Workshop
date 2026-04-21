@@ -1,7 +1,14 @@
-"""Load test routes: start/stop synthetic traffic, stream metrics via SSE."""
+"""Load test routes: start/stop synthetic traffic, stream metrics via SSE.
+
+Designed to trigger Lakebase autoscaling by pushing CPU, memory, and working set:
+  - Writes: batch INSERT via generate_series with ~500-byte JSONB payloads
+  - Reads: CPU-heavy queries (random sorts, md5 hashing, window functions, JSONB ops)
+  - Connection pooling for realistic concurrent pressure
+"""
 
 import asyncio
 import json
+import random
 import time
 import uuid
 from collections import deque
@@ -9,17 +16,78 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .db import get_connection
+from .db import get_pooled_connection, get_pool, get_db_metrics
 
 router = APIRouter(prefix="/api/loadtest", tags=["loadtest"])
 
 _active_tests: dict[str, dict] = {}
 
+_READ_QUERIES = [
+    (
+        "SELECT event_type, count(*) AS cnt, "
+        "avg(length(payload::text)) AS avg_size, "
+        "sum(length(payload::text)) AS total_payload_bytes "
+        "FROM demo.events GROUP BY event_type ORDER BY cnt DESC",
+        "agg_by_type",
+    ),
+    (
+        "SELECT count(*) AS total, "
+        "avg(length(payload::text)) AS avg_payload, "
+        "sum(length(payload::text)) AS total_bytes, "
+        "min(created_at) AS earliest, max(created_at) AS latest "
+        "FROM demo.events",
+        "full_stats",
+    ),
+    (
+        "SELECT source, event_type, count(*) AS cnt, "
+        "avg(length(payload::text)) AS avg_payload "
+        "FROM demo.events GROUP BY source, event_type "
+        "ORDER BY cnt DESC LIMIT 200",
+        "agg_source_type",
+    ),
+    (
+        "SELECT date_trunc('minute', created_at) AS minute, "
+        "count(*) AS cnt, count(DISTINCT event_type) AS types, "
+        "avg(length(payload::text)) AS avg_payload "
+        "FROM demo.events GROUP BY 1 ORDER BY 1 DESC LIMIT 200",
+        "time_series",
+    ),
+    (
+        "SELECT event_type, "
+        "percentile_cont(0.5) WITHIN GROUP (ORDER BY event_id) AS median_id, "
+        "percentile_cont(0.95) WITHIN GROUP (ORDER BY event_id) AS p95_id, "
+        "count(*) AS cnt "
+        "FROM demo.events GROUP BY event_type",
+        "percentile",
+    ),
+    (
+        "SELECT count(*) AS total FROM demo.events e "
+        "JOIN demo.audit_log a ON a.record_id = e.event_id "
+        "AND a.table_name = 'events'",
+        "cross_join",
+    ),
+    (
+        "SELECT event_type, event_id, "
+        "row_number() OVER (PARTITION BY event_type ORDER BY created_at DESC) AS rn, "
+        "count(*) OVER (PARTITION BY event_type) AS type_cnt, "
+        "lag(event_id, 1) OVER (ORDER BY event_id) AS prev_id "
+        "FROM demo.events ORDER BY event_id DESC LIMIT 5000",
+        "window_funcs",
+    ),
+    (
+        "SELECT md5(string_agg(payload::text, '' ORDER BY random())) AS hash_val, "
+        "count(*) AS rows_hashed "
+        "FROM (SELECT payload FROM demo.events ORDER BY random() LIMIT 5000) sub",
+        "random_sort_hash",
+    ),
+]
+
 
 class LoadTestRequest(BaseModel):
-    concurrency: int = Field(default=5, ge=1, le=50)
-    duration_seconds: int = Field(default=30, ge=5, le=300)
+    concurrency: int = Field(default=10, ge=1, le=100)
+    duration_seconds: int = Field(default=60, ge=5, le=600)
     write_ratio: float = Field(default=0.3, ge=0.0, le=1.0)
+    write_batch_size: int = Field(default=500, ge=1, le=10000)
     branch_id: str | None = None
 
 
@@ -32,55 +100,121 @@ class LoadTestStatus(BaseModel):
     qps: float
     avg_latency_ms: float
     p95_latency_ms: float
+    read_queries: int = 0
+    write_queries: int = 0
+    read_avg_latency_ms: float = 0
+    write_avg_latency_ms: float = 0
+    read_errors: int = 0
+    write_errors: int = 0
+    rows_written: int = 0
+    rows_read: int = 0
+    concurrency: int = 0
+    write_ratio: float = 0
+    write_batch_size: int = 0
+    db_active_connections: int = 0
+    db_cache_hit_ratio: float = 0
 
 
-def _run_query(is_write: bool, branch_id: str | None):
-    """Execute a single test query and return latency in ms."""
+def _run_read_query(branch_id: str | None, query_idx: int):
+    """Run a CPU/memory-heavy query that pushes utilization."""
+    sql, _ = _READ_QUERIES[query_idx % len(_READ_QUERIES)]
+    start = time.monotonic()
+    rows_scanned = 0
+    try:
+        with get_pooled_connection(branch_id) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                results = cur.fetchall()
+                if results:
+                    first = results[0]
+                    rows_scanned = first.get("total", 0) or first.get("cnt", 0) or first.get("rows_hashed", 0) or len(results)
+                    rows_scanned = max(rows_scanned, len(results))
+        return (time.monotonic() - start) * 1000, None, rows_scanned
+    except Exception as e:
+        return (time.monotonic() - start) * 1000, str(e), 0
+
+
+def _run_write_query(branch_id: str | None, batch_size: int):
+    """Batch insert with ~500-byte JSONB payloads to push I/O and working set."""
     start = time.monotonic()
     try:
-        with get_connection(branch_id) as conn:
+        with get_pooled_connection(branch_id) as conn:
             with conn.cursor() as cur:
-                if is_write:
-                    cur.execute(
-                        "INSERT INTO demo.events (event_type, source, payload) "
-                        "VALUES (%s, %s, %s)",
-                        ("loadtest", "lab-console", json.dumps({"ts": time.time()})),
-                    )
-                    conn.commit()
-                else:
-                    cur.execute(
-                        "SELECT count(*) FROM demo.events WHERE event_type = 'loadtest'"
-                    )
-                    cur.fetchone()
-        latency = (time.monotonic() - start) * 1000
-        return latency, None
+                cur.execute(
+                    "INSERT INTO demo.events (event_type, source, payload) "
+                    "SELECT 'loadtest', 'lab-console', "
+                    "jsonb_build_object("
+                    "  'ts', extract(epoch from now()), "
+                    "  'seq', gs, "
+                    "  'batch_id', md5(random()::text), "
+                    "  'data', repeat(md5(random()::text), 8), "
+                    "  'tags', array_to_json(ARRAY["
+                    "    md5(random()::text), md5(random()::text), md5(random()::text)"
+                    "  ]), "
+                    "  'metrics', jsonb_build_object("
+                    "    'cpu', random() * 100, "
+                    "    'mem', random() * 100, "
+                    "    'disk', random() * 1000, "
+                    "    'net_in', random() * 500, "
+                    "    'net_out', random() * 500"
+                    "  )"
+                    ") "
+                    "FROM generate_series(1, %s) AS gs",
+                    (batch_size,),
+                )
+                rows = cur.rowcount
+                conn.commit()
+        return (time.monotonic() - start) * 1000, None, rows
     except Exception as e:
-        latency = (time.monotonic() - start) * 1000
-        return latency, str(e)
+        return (time.monotonic() - start) * 1000, str(e), 0
 
 
 async def _worker(test_id: str, is_write: bool, branch_id: str | None):
-    """Single async worker that runs queries in a loop."""
+    """Single async worker that fires heavy queries using pooled connections."""
     state = _active_tests.get(test_id)
     if not state:
         return
     loop = asyncio.get_event_loop()
+    query_counter = random.randint(0, len(_READ_QUERIES) - 1)
+    batch_size = state.get("write_batch_size", 500)
+
     while state["running"]:
-        latency, error = await loop.run_in_executor(
-            None, _run_query, is_write, branch_id
-        )
+        if is_write:
+            latency, error, rows = await loop.run_in_executor(
+                None, _run_write_query, branch_id, batch_size
+            )
+            state["rows_written"] += rows
+        else:
+            latency, error, rows_scanned = await loop.run_in_executor(
+                None, _run_read_query, branch_id, query_counter
+            )
+            query_counter += 1
+            state["rows_read"] += rows_scanned
+
         state["total_queries"] += 1
         state["latencies"].append(latency)
+        if is_write:
+            state["write_queries"] += 1
+            state["write_latencies"].append(latency)
+            if error:
+                state["write_errors"] += 1
+        else:
+            state["read_queries"] += 1
+            state["read_latencies"].append(latency)
+            if error:
+                state["read_errors"] += 1
         if error:
             state["total_errors"] += 1
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0)
 
 
 async def _orchestrator(test_id: str, req: LoadTestRequest):
     """Manage the load test lifecycle."""
     state = _active_tests[test_id]
-    tasks = []
 
+    get_pool(req.branch_id, min_size=4, max_size=min(req.concurrency + 5, 60))
+
+    tasks = []
     for i in range(req.concurrency):
         is_write = (i / req.concurrency) < req.write_ratio
         tasks.append(asyncio.create_task(_worker(test_id, is_write, req.branch_id)))
@@ -94,6 +228,41 @@ async def _orchestrator(test_id: str, req: LoadTestRequest):
             await t
         except asyncio.CancelledError:
             pass
+
+
+def _build_status(test_id: str, state: dict) -> LoadTestStatus:
+    elapsed = time.monotonic() - state["start_time"]
+    latencies = list(state["latencies"])
+    sorted_lat = sorted(latencies) if latencies else [0]
+
+    read_lats = list(state["read_latencies"])
+    write_lats = list(state["write_latencies"])
+
+    db_metrics = state.get("_db_metrics_cache", {})
+
+    return LoadTestStatus(
+        test_id=test_id,
+        running=state["running"],
+        elapsed_seconds=round(elapsed, 1),
+        total_queries=state["total_queries"],
+        total_errors=state["total_errors"],
+        qps=round(state["total_queries"] / max(elapsed, 0.1), 1),
+        avg_latency_ms=round(sum(sorted_lat) / max(len(sorted_lat), 1), 2),
+        p95_latency_ms=round(sorted_lat[int(len(sorted_lat) * 0.95)] if sorted_lat else 0, 2),
+        read_queries=state["read_queries"],
+        write_queries=state["write_queries"],
+        read_avg_latency_ms=round(sum(read_lats) / max(len(read_lats), 1), 2) if read_lats else 0,
+        write_avg_latency_ms=round(sum(write_lats) / max(len(write_lats), 1), 2) if write_lats else 0,
+        read_errors=state["read_errors"],
+        write_errors=state["write_errors"],
+        rows_written=state["rows_written"],
+        rows_read=state["rows_read"],
+        concurrency=state["concurrency"],
+        write_ratio=state["write_ratio"],
+        write_batch_size=state.get("write_batch_size", 500),
+        db_active_connections=db_metrics.get("active_connections", 0),
+        db_cache_hit_ratio=db_metrics.get("cache_hit_ratio", 0),
+    )
 
 
 @router.post("/start", response_model=LoadTestStatus)
@@ -110,6 +279,19 @@ async def start_load_test(req: LoadTestRequest):
         "total_errors": 0,
         "latencies": deque(maxlen=10000),
         "concurrency": req.concurrency,
+        "write_ratio": req.write_ratio,
+        "write_batch_size": req.write_batch_size,
+        "read_queries": 0,
+        "write_queries": 0,
+        "read_latencies": deque(maxlen=5000),
+        "write_latencies": deque(maxlen=5000),
+        "read_errors": 0,
+        "write_errors": 0,
+        "rows_written": 0,
+        "rows_read": 0,
+        "lookup_ids": [],
+        "_db_metrics_cache": {},
+        "branch_id": req.branch_id,
     }
 
     asyncio.create_task(_orchestrator(test_id, req))
@@ -123,6 +305,9 @@ async def start_load_test(req: LoadTestRequest):
         qps=0,
         avg_latency_ms=0,
         p95_latency_ms=0,
+        concurrency=req.concurrency,
+        write_ratio=req.write_ratio,
+        write_batch_size=req.write_batch_size,
     )
 
 
@@ -142,21 +327,8 @@ def get_load_test_status(test_id: str):
     state = _active_tests.get(test_id)
     if not state:
         raise HTTPException(404, "Test not found")
-
-    elapsed = time.monotonic() - state["start_time"]
-    latencies = list(state["latencies"])
-    sorted_lat = sorted(latencies) if latencies else [0]
-
-    return LoadTestStatus(
-        test_id=test_id,
-        running=state["running"],
-        elapsed_seconds=round(elapsed, 1),
-        total_queries=state["total_queries"],
-        total_errors=state["total_errors"],
-        qps=round(state["total_queries"] / max(elapsed, 0.1), 1),
-        avg_latency_ms=round(sum(sorted_lat) / max(len(sorted_lat), 1), 2),
-        p95_latency_ms=round(sorted_lat[int(len(sorted_lat) * 0.95)] if sorted_lat else 0, 2),
-    )
+    state["_db_metrics_cache"] = get_db_metrics(state.get("branch_id"))
+    return _build_status(test_id, state)
 
 
 @router.get("/stream/{test_id}")
@@ -168,22 +340,7 @@ async def stream_metrics(test_id: str):
 
     async def event_generator():
         while state.get("running", False):
-            elapsed = time.monotonic() - state["start_time"]
-            latencies = list(state["latencies"])
-            sorted_lat = sorted(latencies) if latencies else [0]
-
-            data = {
-                "test_id": test_id,
-                "running": state["running"],
-                "elapsed_seconds": round(elapsed, 1),
-                "total_queries": state["total_queries"],
-                "total_errors": state["total_errors"],
-                "qps": round(state["total_queries"] / max(elapsed, 0.1), 1),
-                "avg_latency_ms": round(sum(sorted_lat) / max(len(sorted_lat), 1), 2),
-                "p95_latency_ms": round(
-                    sorted_lat[int(len(sorted_lat) * 0.95)] if sorted_lat else 0, 2
-                ),
-            }
+            data = _build_status(test_id, state).model_dump()
             yield f"data: {json.dumps(data)}\n\n"
             await asyncio.sleep(1)
 

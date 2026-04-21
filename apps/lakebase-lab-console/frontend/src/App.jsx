@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import { api } from './api'
+import {
+  LayoutDashboard, TrendingUp, GitBranch, Cpu,
+  Database, RefreshCw, Bot, Terminal, Layers, Sun, Moon, ExternalLink
+} from './icons'
 import Dashboard from './pages/Dashboard'
 import BranchManager from './pages/BranchManager'
 import ComputePage from './pages/ComputePage'
@@ -11,14 +15,14 @@ import ApiTester from './pages/ApiTester'
 import AgentMemory from './pages/AgentMemory'
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: '\u25C8', section: 'overview' },
-  { id: 'autoscale', label: 'Autoscale Demo', icon: '\uD83D\uDCC8', section: 'overview' },
-  { id: 'branches', label: 'Branches', icon: '\u2442', section: 'manage' },
-  { id: 'compute', label: 'Compute Config', icon: '\u26A1', section: 'manage' },
-  { id: 'data', label: 'Data Ops', icon: '\uD83D\uDDC3', section: 'data' },
-  { id: 'sync', label: 'Reverse ETL', icon: '\uD83D\uDD04', section: 'data' },
-  { id: 'agent', label: 'Agent Memory', icon: '\uD83E\uDD16', section: 'data' },
-  { id: 'api', label: 'API Tester', icon: '\uD83D\uDD0C', section: 'tools' },
+  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'overview' },
+  { id: 'autoscale', label: 'Autoscale Demo', Icon: TrendingUp, section: 'overview' },
+  { id: 'branches', label: 'Branches', Icon: GitBranch, section: 'manage' },
+  { id: 'compute', label: 'Compute', Icon: Cpu, section: 'manage' },
+  { id: 'data', label: 'Data Ops', Icon: Database, section: 'data' },
+  { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'data' },
+  { id: 'agent', label: 'Agent Memory', Icon: Bot, section: 'data' },
+  { id: 'api', label: 'API Tester', Icon: Terminal, section: 'tools' },
 ]
 
 const SECTIONS = [
@@ -28,10 +32,24 @@ const SECTIONS = [
   { key: 'tools', label: 'Tools' },
 ]
 
+function getInitialTheme() {
+  const stored = localStorage.getItem('lakebase-theme')
+  if (stored === 'light' || stored === 'dark') return stored
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard')
   const [dbStatus, setDbStatus] = useState(null)
   const [config, setConfig] = useState(null)
+  const [theme, setTheme] = useState(getInitialTheme)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('lakebase-theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   useEffect(() => {
     api.dbtest().then(setDbStatus).catch(() => setDbStatus({ db_connected: false }))
@@ -57,8 +75,13 @@ export default function App() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <h1>Lakebase Console</h1>
-          <p>{config?.project_id || 'loading...'}</p>
+          <div className="sidebar-brand-row">
+            <div className="sidebar-logo">
+              <Layers size={18} />
+            </div>
+            <h1>Lakebase Lab</h1>
+          </div>
+          {config?.project_id && <p>{config.project_id}</p>}
         </div>
         <ul className="sidebar-nav">
           {SECTIONS.map((section) => {
@@ -67,7 +90,7 @@ export default function App() {
             return (
               <li key={section.key}>
                 <div className="sidebar-section-label">{section.label}</div>
-                <ul style={{ listStyle: 'none' }}>
+                <ul>
                   {items.map((item) => (
                     <li key={item.id}>
                       <a
@@ -75,7 +98,7 @@ export default function App() {
                         className={activePage === item.id ? 'active' : ''}
                         onClick={(e) => { e.preventDefault(); setActivePage(item.id) }}
                       >
-                        <span className="nav-icon">{item.icon}</span>
+                        <span className="nav-icon"><item.Icon size={16} /></span>
                         <span>{item.label}</span>
                       </a>
                     </li>
@@ -85,9 +108,26 @@ export default function App() {
             )
           })}
         </ul>
-        <div className="sidebar-status">
-          <span className={`status-dot ${dbStatus?.db_connected ? 'connected' : 'disconnected'}`} />
-          {dbStatus?.db_connected ? 'Connected' : 'Disconnected'}
+        <div className="sidebar-footer">
+          <div className="sidebar-status">
+            <span className={`status-dot ${dbStatus?.db_connected ? 'connected' : 'disconnected'}`} />
+            <span style={{ flex: 1 }}>{dbStatus?.db_connected ? 'Connected' : 'Disconnected'}</span>
+            <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          </div>
+          {dbStatus?.db_connected && config?.workspace_host && config?.project_id && (
+            <a
+              className="lakebase-link"
+              href={`${config.workspace_host}/lakebase/projects/${config.project_id}${config.branch_id ? `?branchId=${config.branch_id}` : ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Database size={14} />
+              <span>Open in Lakebase</span>
+              <ExternalLink size={12} />
+            </a>
+          )}
         </div>
       </aside>
       <main className="main-content">

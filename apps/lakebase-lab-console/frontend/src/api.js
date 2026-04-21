@@ -24,7 +24,7 @@ export const api = {
   createBranch: (data) => request('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
   deleteBranch: (id) => request(`/api/branches/${id}`, { method: 'DELETE' }),
 
-  // Compute
+  // Compute (includes db_active_connections, db_cache_hit_ratio, db_total_transactions)
   listEndpoints: (branchId) => request(`/api/compute/${branchId}`),
   updateCompute: (branchId, endpointId, data) =>
     request(`/api/compute/${branchId}/${endpointId}`, { method: 'PATCH', body: JSON.stringify(data) }),

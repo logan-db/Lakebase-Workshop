@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
 
+from .db import get_db_metrics
+
 router = APIRouter(prefix="/api/compute", tags=["compute"])
 
 
@@ -25,6 +27,9 @@ class EndpointInfo(BaseModel):
     min_cu: float | None = None
     max_cu: float | None = None
     scale_to_zero_seconds: int | None = None
+    db_active_connections: int | None = None
+    db_cache_hit_ratio: float | None = None
+    db_total_transactions: int | None = None
 
 
 class UpdateComputeRequest(BaseModel):
@@ -34,7 +39,7 @@ class UpdateComputeRequest(BaseModel):
 
 @router.get("/{branch_id}", response_model=list[EndpointInfo])
 def list_endpoints(branch_id: str):
-    """List compute endpoints for a branch."""
+    """List compute endpoints for a branch, enriched with live DB metrics."""
     w = WorkspaceClient()
     project_id = _get_project_id()
     endpoints = list(
@@ -42,6 +47,8 @@ def list_endpoints(branch_id: str):
             parent=f"projects/{project_id}/branches/{branch_id}"
         )
     )
+
+    db_metrics = get_db_metrics(branch_id)
 
     result = []
     for ep in endpoints:
@@ -55,6 +62,9 @@ def list_endpoints(branch_id: str):
             host=getattr(s.hosts, "host", None) if s and s.hosts else None,
             min_cu=getattr(s, "autoscaling_limit_min_cu", None) if s else None,
             max_cu=getattr(s, "autoscaling_limit_max_cu", None) if s else None,
+            db_active_connections=db_metrics.get("active_connections"),
+            db_cache_hit_ratio=db_metrics.get("cache_hit_ratio"),
+            db_total_transactions=db_metrics.get("total_transactions"),
         ))
     return result
 
@@ -62,11 +72,11 @@ def list_endpoints(branch_id: str):
 @router.patch("/{branch_id}/{endpoint_id}", response_model=EndpointInfo)
 def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest):
     """Update autoscaling limits for a compute endpoint."""
-    if req.max_cu - req.min_cu > 8:
+    if req.max_cu - req.min_cu > 16:
         raise HTTPException(
             400,
             f"Autoscaling range too wide: {req.max_cu - req.min_cu} CU "
-            f"(max spread is 8 CU)"
+            f"(max spread is 16 CU)"
         )
 
     w = WorkspaceClient()

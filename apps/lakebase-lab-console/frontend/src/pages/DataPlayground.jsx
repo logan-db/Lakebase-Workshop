@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { Database, Plus, Trash2, RefreshCw, Check, Table, Clock, AlertCircle } from '../icons'
 
 export default function DataPlayground() {
   const [tab, setTab] = useState('products')
@@ -76,36 +77,38 @@ export default function DataPlayground() {
       <div className="metrics-row">
         {Object.entries(stats).map(([table, count]) => (
           <div className="metric-card" key={table}>
+            <div className="metric-icon"><Table size={16} /></div>
             <div className="metric-value">{count >= 0 ? count.toLocaleString() : 'err'}</div>
             <div className="metric-label">{table}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {['products', 'audit'].map((t) => (
-          <button
-            key={t}
-            className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => { setTab(t); t === 'audit' && loadAudit() }}
-          >
-            {t === 'products' ? 'Products' : 'Audit Log'}
-          </button>
-        ))}
+      <div className="tab-group">
+        <button className={`tab-btn ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>
+          Products
+        </button>
+        <button className={`tab-btn ${tab === 'audit' ? 'active' : ''}`} onClick={() => { setTab('audit'); loadAudit() }}>
+          Audit Log
+        </button>
       </div>
 
       {tab === 'products' && (
         <div className="card">
           <div className="card-header">
-            <h3>Products ({products.length})</h3>
+            <h3><Database size={16} /> Products ({products.length})</h3>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>+ Add Product</button>
-              <button className="btn btn-secondary btn-sm" onClick={loadProducts}>Refresh</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
+                <Plus size={14} /> Add Product
+              </button>
+              <button className="btn btn-secondary btn-sm btn-icon" onClick={loadProducts}>
+                <RefreshCw size={14} />
+              </button>
             </div>
           </div>
 
           {showAdd && (
-            <form onSubmit={handleAdd} style={{ marginBottom: 16, padding: 16, background: 'var(--bg-primary)', borderRadius: 'var(--radius)' }}>
+            <form onSubmit={handleAdd} style={{ marginBottom: 16, padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
               <div className="form-row">
                 <div className="form-group">
                   <label>Name</label>
@@ -133,31 +136,45 @@ export default function DataPlayground() {
                 <label>Description</label>
                 <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </div>
-              <button className="btn btn-primary">Save Product</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary">
+                  <Check size={14} /> Save Product
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+              </div>
             </form>
           )}
 
-          {loading ? <p style={{ color: 'var(--text-secondary)' }}>Loading...</p> : (
+          {loading ? (
+            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+          ) : products.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon"><Database size={36} /></div>
+              <p>No products found</p>
+            </div>
+          ) : (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Category</th><th>Actions</th>
+                  <th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Category</th><th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((p) => (
                   <tr key={p.product_id}>
-                    <td>{p.product_id}</td>
-                    <td style={{ fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.product_id}</td>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>${parseFloat(p.price).toFixed(2)}</td>
                     <td>
                       <span className={`badge ${p.stock_quantity > 50 ? 'badge-success' : p.stock_quantity > 0 ? 'badge-warning' : 'badge-danger'}`}>
                         {p.stock_quantity}
                       </span>
                     </td>
-                    <td>{p.category}</td>
-                    <td>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.product_id)}>Delete</button>
+                    <td><span className="badge badge-purple">{p.category}</span></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-danger btn-xs" onClick={() => handleDelete(p.product_id)}>
+                        <Trash2 size={12} /> Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -170,33 +187,44 @@ export default function DataPlayground() {
       {tab === 'audit' && (
         <div className="card">
           <div className="card-header">
-            <h3>Audit Log (last 50)</h3>
-            <button className="btn btn-secondary btn-sm" onClick={loadAudit}>Refresh</button>
+            <h3><Clock size={16} /> Audit Log (last 50)</h3>
+            <button className="btn btn-secondary btn-sm btn-icon" onClick={loadAudit}>
+              <RefreshCw size={14} />
+            </button>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr><th>ID</th><th>Table</th><th>Operation</th><th>Record ID</th><th>Time</th></tr>
-            </thead>
-            <tbody>
-              {audit.map((a) => (
-                <tr key={a.audit_id}>
-                  <td>{a.audit_id}</td>
-                  <td>{a.table_name}</td>
-                  <td>
-                    <span className={`badge ${a.operation === 'INSERT' ? 'badge-success' : a.operation === 'DELETE' ? 'badge-danger' : 'badge-warning'}`}>
-                      {a.operation}
-                    </span>
-                  </td>
-                  <td>{a.record_id}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {audit.length === 0 ? (
+            <div className="empty-state" style={{ padding: 20 }}><p>No audit entries yet</p></div>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr><th>ID</th><th>Table</th><th>Operation</th><th>Record ID</th><th>Time</th></tr>
+              </thead>
+              <tbody>
+                {audit.map((a) => (
+                  <tr key={a.audit_id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{a.audit_id}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{a.table_name}</td>
+                    <td>
+                      <span className={`badge ${a.operation === 'INSERT' ? 'badge-success' : a.operation === 'DELETE' ? 'badge-danger' : 'badge-warning'}`}>
+                        {a.operation}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{a.record_id}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.created_at}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+          {toast.msg}
+        </div>
+      )}
     </div>
   )
 }

@@ -56,12 +56,16 @@ def health():
 
 @app.get("/api/config")
 def get_config():
+    host = os.getenv("DATABRICKS_HOST", "")
+    if host and not host.startswith("https://"):
+        host = f"https://{host}"
     return {
         "project_id": os.getenv("LAKEBASE_PROJECT_ID", ""),
         "branch_id": os.getenv("LAKEBASE_BRANCH_ID", "production"),
         "database": os.getenv("PGDATABASE", "databricks_postgres"),
         "schema": os.getenv("LAKEBASE_SCHEMA", "demo"),
         "pghost_set": bool(os.getenv("PGHOST")),
+        "workspace_host": host,
     }
 
 
