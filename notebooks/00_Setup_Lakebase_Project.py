@@ -190,129 +190,16 @@ print(f"✓ Connected to Lakebase")
 
 # COMMAND ----------
 
-SEED_SQL = """
-CREATE SCHEMA IF NOT EXISTS demo;
+import os
 
-CREATE TABLE IF NOT EXISTS demo.products (
-    product_id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
-    stock_quantity INTEGER DEFAULT 0 CHECK (stock_quantity >= 0),
-    category VARCHAR(100),
-    tags TEXT[],
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
+notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+project_root = os.path.dirname(os.path.dirname(f"/Workspace{notebook_path}"))
+seed_path = os.path.join(project_root, "bootstrap", "seed.sql")
 
-CREATE TABLE IF NOT EXISTS demo.events (
-    event_id SERIAL PRIMARY KEY,
-    event_type VARCHAR(50) NOT NULL,
-    source VARCHAR(100),
-    payload JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
+with open(seed_path) as f:
+    SEED_SQL = f.read()
 
-CREATE TABLE IF NOT EXISTS demo.agent_sessions (
-    session_id VARCHAR(64) PRIMARY KEY,
-    agent_name VARCHAR(100) NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS demo.agent_messages (
-    message_id SERIAL PRIMARY KEY,
-    session_id VARCHAR(64) NOT NULL REFERENCES demo.agent_sessions(session_id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS demo.audit_log (
-    audit_id SERIAL PRIMARY KEY,
-    table_name VARCHAR(100) NOT NULL,
-    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    record_id INTEGER,
-    old_data JSONB,
-    new_data JSONB,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(100) DEFAULT CURRENT_USER
-);
-
-CREATE INDEX IF NOT EXISTS idx_events_type ON demo.events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_created ON demo.events(created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_session ON demo.agent_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_products_category ON demo.products(category);
-CREATE INDEX IF NOT EXISTS idx_products_tags ON demo.products USING GIN(tags);
-CREATE INDEX IF NOT EXISTS idx_audit_table ON demo.audit_log(table_name);
-
-CREATE OR REPLACE FUNCTION demo.audit_trigger_fn()
-RETURNS TRIGGER AS $$
-DECLARE
-    pk_col TEXT;
-    rec_id INTEGER;
-BEGIN
-    pk_col := CASE TG_TABLE_NAME
-        WHEN 'products' THEN 'product_id'
-        WHEN 'events'   THEN 'event_id'
-        WHEN 'agent_messages' THEN 'message_id'
-        ELSE NULL
-    END;
-
-    IF TG_OP = 'INSERT' THEN
-        rec_id := (row_to_json(NEW)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, new_data)
-        VALUES (TG_TABLE_NAME, 'INSERT', rec_id, row_to_json(NEW)::jsonb);
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        rec_id := (row_to_json(NEW)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, old_data, new_data)
-        VALUES (TG_TABLE_NAME, 'UPDATE', rec_id, row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        rec_id := (row_to_json(OLD)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, old_data)
-        VALUES (TG_TABLE_NAME, 'DELETE', rec_id, row_to_json(OLD)::jsonb);
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_audit_products ON demo.products;
-CREATE TRIGGER trg_audit_products
-    AFTER INSERT OR UPDATE OR DELETE ON demo.products
-    FOR EACH ROW EXECUTE FUNCTION demo.audit_trigger_fn();
-
-DROP TRIGGER IF EXISTS trg_audit_events ON demo.events;
-CREATE TRIGGER trg_audit_events
-    AFTER INSERT OR UPDATE OR DELETE ON demo.events
-    FOR EACH ROW EXECUTE FUNCTION demo.audit_trigger_fn();
-
-INSERT INTO demo.products (name, description, price, stock_quantity, category, tags, metadata)
-SELECT * FROM (VALUES
-    ('Wireless Headphones', 'Bluetooth 5.3 with ANC', 79.99, 150, 'Electronics',
-     ARRAY['audio', 'bluetooth', 'featured'], '{"brand": "SoundMax", "color": "black"}'::jsonb),
-    ('Mechanical Keyboard', 'Cherry MX Brown switches, RGB', 129.99, 75, 'Electronics',
-     ARRAY['peripherals', 'gaming'], '{"brand": "KeyForge", "layout": "TKL"}'::jsonb),
-    ('Python Cookbook', 'Advanced recipes for Python 3.12', 44.99, 200, 'Books',
-     ARRAY['programming', 'bestseller'], '{"author": "A. Developer", "pages": 680}'::jsonb),
-    ('USB-C Hub', '7-in-1 with HDMI and ethernet', 49.99, 300, 'Accessories',
-     ARRAY['usb', 'hub', 'new'], '{"brand": "ConnectPro", "ports": 7}'::jsonb),
-    ('Standing Desk Mat', 'Anti-fatigue ergonomic mat', 39.99, 90, 'Office',
-     ARRAY['ergonomic', 'office'], '{"material": "polyurethane", "size": "20x36"}'::jsonb),
-    ('4K Webcam', 'Ultra HD with autofocus and mic', 89.99, 60, 'Electronics',
-     ARRAY['video', 'streaming'], '{"brand": "ClearView", "resolution": "4K"}'::jsonb),
-    ('Laptop Stand', 'Adjustable aluminum stand', 34.99, 120, 'Accessories',
-     ARRAY['ergonomic', 'laptop'], '{"material": "aluminum", "adjustable": true}'::jsonb),
-    ('Data Engineering Book', 'Fundamentals of Data Engineering', 54.99, 85, 'Books',
-     ARRAY['data', 'engineering', 'featured'], '{"author": "J. Reis", "pages": 450}'::jsonb)
-) AS seed(name, description, price, stock_quantity, category, tags, metadata)
-WHERE NOT EXISTS (SELECT 1 FROM demo.products LIMIT 1);
-"""
+print(f"Loaded seed SQL from: bootstrap/seed.sql ({len(SEED_SQL)} chars)")
 
 with conn.cursor() as cur:
     cur.execute(SEED_SQL)
@@ -386,7 +273,8 @@ print(f"  For app.yaml, set LAKEBASE_PROJECT_ID to: {PROJECT_ID}")
 # MAGIC | 5 | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
 # MAGIC | 6 | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
 # MAGIC | 7 | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | 8 | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | 8 | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase |
+# MAGIC | 9 | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
 
 # COMMAND ----------
 

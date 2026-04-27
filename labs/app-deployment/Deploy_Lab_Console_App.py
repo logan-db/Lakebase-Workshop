@@ -54,19 +54,28 @@
 # MAGIC
 # MAGIC ```yaml
 # MAGIC command:
+# MAGIC   - python
+# MAGIC   - -m
 # MAGIC   - uvicorn
 # MAGIC   - app:app
-# MAGIC   - --workers
-# MAGIC   - "4"
+# MAGIC   - --host
+# MAGIC   - 0.0.0.0
+# MAGIC   - --port
+# MAGIC   - "8000"
 # MAGIC env:
 # MAGIC   - name: LAKEBASE_PROJECT_ID
-# MAGIC     value: <set-after-setup>
-# MAGIC   - name: DATABRICKS_HOST
-# MAGIC     value: <set-after-setup>
+# MAGIC     value: <your-project-id>
+# MAGIC   - name: LAKEBASE_BRANCH_ID
+# MAGIC     value: production
+# MAGIC   - name: LAKEBASE_SCHEMA
+# MAGIC     value: demo
 # MAGIC resources:
 # MAGIC   - name: lakebase-db
 # MAGIC     type: postgres
 # MAGIC ```
+# MAGIC
+# MAGIC After running notebook `00`, update `LAKEBASE_PROJECT_ID` in `app.yaml` with
+# MAGIC your project ID (format: `lakebase-lab-<your-username>`).
 
 # COMMAND ----------
 
@@ -127,7 +136,7 @@
 
 # COMMAND ----------
 
-# MAGIC %run ../_setup
+# MAGIC %run ../../_setup
 
 # COMMAND ----------
 
@@ -187,21 +196,19 @@ print(f"✓ Created OAuth role and granted schema permissions on demo to SP: {SP
 # MAGIC ---
 # MAGIC ## Workshop Complete!
 # MAGIC
-# MAGIC You have explored every core Lakebase Autoscaling feature:
+# MAGIC You've deployed a full-stack app backed by Lakebase. Here's a summary of every lab path in the workshop:
 # MAGIC
-# MAGIC | Notebook | Feature |
-# MAGIC |----------|---------|
-# MAGIC | **00** | Lakebase architecture, project setup & schema seeding |
-# MAGIC | **01** | Copy-on-write branching |
-# MAGIC | **02** | Authentication, OAuth tokens & permissions |
-# MAGIC | **03** | Autoscaling compute & scale-to-zero |
-# MAGIC | **04** | CRUD, JSONB, arrays, audit triggers, transactions |
-# MAGIC | **05** | Database observability & monitoring |
-# MAGIC | **06** | Reverse ETL with synced tables |
-# MAGIC | **07** | Backup & point-in-time recovery |
-# MAGIC | **08** | Agent memory (sessions + messages) |
-# MAGIC | **09** | Full-stack app deployment |
+# MAGIC | Path | Lab Folder | Feature |
+# MAGIC |------|-----------|---------|
+# MAGIC | **Foundation** | `notebooks/` | Project setup, architecture, schema seeding |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB, arrays, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, roles, two-layer permissions |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | PITR, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with sessions |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app (this lab) |
 # MAGIC
-# MAGIC Check out the `labs/` folder for additional exercises:
-# MAGIC - `labs/advanced-sql/` — advanced PostgreSQL SQL patterns
-# MAGIC - `labs/reverse-etl/` — standalone synced table lab
+# MAGIC Explore any paths you haven't tried yet — each one is independent and self-contained.

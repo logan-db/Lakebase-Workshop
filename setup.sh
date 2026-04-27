@@ -104,6 +104,10 @@ step "Connect to your Databricks workspace"
 
 EXISTING=$(databricks auth profiles 2>/dev/null | grep "YES" | head -5 || true)
 
+if [[ -z "$EXISTING" ]]; then
+  info "No authenticated workspaces found. Let's connect to one."
+fi
+
 if [[ -n "$EXISTING" ]]; then
   echo ""
   info "Found existing authenticated workspaces:"
@@ -188,18 +192,38 @@ open('$DAB_YAML', 'w').write(content)
 " 2>/dev/null || true
 ok "databricks.yml configured with profile: $PROFILE"
 
-# Write a small config file for reference
-cat > "$SCRIPT_DIR/.workshop-config" <<EOF
-PROFILE=$PROFILE
-WORKSPACE_HOST=$WORKSPACE_HOST
-EOF
-ok "Config saved to .workshop-config"
-
 # Resolve the current user's email for workspace paths (used in later steps)
 USER_EMAIL=$(databricks current-user me --profile "$PROFILE" 2>/dev/null \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['userName'])" 2>/dev/null || echo "<your-email>")
 
 WORKSPACE_NOTEBOOK_DIR="/Workspace/Users/${USER_EMAIL}/lakebase-workshop"
+
+# Derive the Lakebase project ID (same logic as notebook 00 and _setup.py)
+PROJECT_ID=$(python3 -c "
+import re
+email = '$USER_EMAIL'
+name = email.split('@')[0]
+name = re.sub(r'[^a-z0-9-]', '-', name.lower())
+name = re.sub(r'-+', '-', name).strip('-')
+print(f'lakebase-lab-{name}')
+" 2>/dev/null || echo "<your-project-id>")
+
+# Write the project ID into app.yaml
+APP_YAML="$SCRIPT_DIR/apps/lakebase-lab-console/app.yaml"
+python3 -c "
+content = open('$APP_YAML').read()
+content = content.replace('<your-project-id>', '$PROJECT_ID')
+open('$APP_YAML', 'w').write(content)
+" 2>/dev/null || true
+ok "app.yaml configured with project ID: $PROJECT_ID"
+
+# Write config file for reference
+cat > "$SCRIPT_DIR/.workshop-config" <<EOF
+PROFILE=$PROFILE
+WORKSPACE_HOST=$WORKSPACE_HOST
+PROJECT_ID=$PROJECT_ID
+EOF
+ok "Config saved to .workshop-config"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Optional: Deploy everything to the workspace
@@ -256,10 +280,12 @@ echo -e "    ${CYAN}4. labs/observability/${RESET}           pg_stat views, inde
 echo -e "    ${CYAN}5. labs/authentication/${RESET}          OAuth tokens, roles, permissions"
 echo -e "    ${CYAN}6. labs/backup-recovery/${RESET}         PITR, snapshots, instant restore"
 echo -e "    ${CYAN}7. labs/agentic-memory/${RESET}          Persistent AI agent memory"
-echo -e "    ${CYAN}8. labs/app-deployment/${RESET}          Full-stack Lab Console app (capstone)"
+echo -e "    ${CYAN}8. labs/online-feature-store/${RESET}    Real-time ML feature serving"
+echo -e "    ${CYAN}9. labs/app-deployment/${RESET}          Full-stack Lab Console app (capstone)"
 echo ""
-echo -e "  ${DIM}Workspace:  $WORKSPACE_HOST${RESET}"
-echo -e "  ${DIM}Profile:    $PROFILE${RESET}"
+echo -e "  ${DIM}Workspace:   $WORKSPACE_HOST${RESET}"
+echo -e "  ${DIM}Profile:     $PROFILE${RESET}"
+echo -e "  ${DIM}Project ID:  $PROJECT_ID${RESET}"
 echo ""
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""

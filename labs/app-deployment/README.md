@@ -11,7 +11,7 @@ Deploy the Lab Console — a full-stack React + FastAPI application that uses La
 ## Prerequisites
 
 - Complete **`00_Setup_Lakebase_Project`** (foundation)
-- Node.js 18+ installed (for building the React frontend)
+- Run `setup.sh` and deploy via DABs (the pre-built frontend is included)
 
 ## What the Lab Console Includes
 

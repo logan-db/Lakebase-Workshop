@@ -11,6 +11,7 @@ command:
 env:
   - name: LAKEBASE_PROJECT_ID
     # >>> Set this to YOUR project ID from notebook 00 output <<<
+    # Format: lakebase-lab-<your-username>  (e.g. lakebase-lab-jane-doe)
     value: "lakebase-lab-logan-rupert"
   - name: LAKEBASE_BRANCH_ID
     value: "production"

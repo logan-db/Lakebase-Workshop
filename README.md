@@ -33,15 +33,15 @@ This workshop follows a **foundation + choose-your-path** model:
 │ • Monitoring    │      │ • External tools│      │ • Restore       │
 └─────────────────┘      └─────────────────┘      └─────────────────┘
 
-┌─────────────────┐      ┌─────────────────┐
-│ 7. Agentic      │      │ 8. App          │
-│    Memory       │      │    Deployment   │
-│ ─────────────── │      │ ─────────────── │
-│ • Sessions      │      │ • React +       │
-│ • Multi-turn    │      │   FastAPI       │
-│ • JSONB context │      │ • Full-stack    │
-└─────────────────┘      │   (capstone)    │
-                         └─────────────────┘
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│ 7. Agentic      │      │ 8. Online       │      │ 9. App          │
+│    Memory       │      │    Feature Store│      │    Deployment   │
+│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
+│ • Sessions      │      │ • Feature tables│      │ • React +       │
+│ • Multi-turn    │      │ • Publish/serve │      │   FastAPI       │
+│ • JSONB context │      │ • ML serving    │      │ • Full-stack    │
+└─────────────────┘      └─────────────────┘      │   (capstone)    │
+                                                  └─────────────────┘
 ```
 
 ### Foundation (required)
@@ -65,7 +65,8 @@ After completing the foundation, pick any path based on your interest. Each path
 | 5 | **Authentication** | `labs/authentication/` | Auth & Permissions | OAuth tokens, roles, two-layer permissions |
 | 6 | **Backup & Recovery** | `labs/backup-recovery/` | Backup & Recovery | PITR, branch snapshots, instant restore |
 | 7 | **Agentic Memory** | `labs/agentic-memory/` | Agent Memory | Persistent AI agent memory with sessions |
-| 8 | **App Deployment** | `labs/app-deployment/` | Deploy Lab Console | Full-stack React + FastAPI app (capstone) |
+| 8 | **Online Feature Store** | `labs/online-feature-store/` | Online Feature Store | Real-time ML feature serving with Lakebase |
+| 9 | **App Deployment** | `labs/app-deployment/` | Deploy Lab Console | Full-stack React + FastAPI app (capstone) |
 
 Each path folder has its own `README.md` with detailed prerequisites and key concepts.
 
@@ -111,14 +112,15 @@ Open **`00_Setup_Lakebase_Project`** and click **Run All**. It creates your Lake
 
 Browse the paths in `labs/` and pick whichever interests you. Each lab notebook is self-contained — it installs its own dependencies and derives the project ID automatically.
 
-**Suggested starting points by role:**
+**Pick a track based on your role:**
 
-| Role | Recommended Paths |
-|------|-------------------|
-| **Data Engineer** | Data Operations → Reverse ETL → Observability |
-| **Platform Engineer** | Development Experience → Observability → Backup & Recovery |
-| **App Developer** | Data Operations → Agentic Memory → App Deployment |
-| **Quick Overview** | Data Operations → Development Experience |
+| Track | Who It's For | Labs |
+|-------|-------------|------|
+| **Application Builders** | App developers, AI engineers | Data Operations → Agentic Memory → App Deployment |
+| **Data & ML Engineers** | Data engineers, ML teams | Reverse ETL → Online Feature Store → Observability |
+| **Platform Architects** | Central IT, infrastructure, security | Development Experience → Authentication → Backup & Recovery |
+
+Tracks are a suggested sequence — every lab is independent, so you can mix and match.
 
 ## Lab Console App
 
@@ -178,6 +180,8 @@ Lakebase-Workshop/
 │   │   └── Agent_Memory.py
 │   ├── authentication/                         # OAuth, roles, permissions
 │   │   └── Authentication_and_Permissions.py
+│   ├── online-feature-store/                   # Online Feature Store (ML serving)
+│   │   └── Online_Feature_Store.py
 │   └── app-deployment/                         # Lab Console (capstone)
 │       └── Deploy_Lab_Console_App.py
 ├── apps/lakebase-lab-console/                  # Lab Console app

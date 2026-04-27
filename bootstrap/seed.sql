@@ -1,5 +1,6 @@
 -- Lakebase Workshop: Demo Schema Seed
 -- Idempotent -- safe to run multiple times
+-- Source of truth: notebooks/00_Setup_Lakebase_Project reads this file at runtime.
 
 CREATE SCHEMA IF NOT EXISTS demo;
 
