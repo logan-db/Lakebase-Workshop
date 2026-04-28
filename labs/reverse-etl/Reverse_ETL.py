@@ -16,6 +16,8 @@
 # MAGIC - Run `00_Setup_Lakebase_Project` first
 # MAGIC - A Unity Catalog catalog & schema with write access
 # MAGIC
+# MAGIC **Docs:** [Serve lakehouse data with synced tables](https://docs.databricks.com/aws/en/oltp/projects/sync-tables)
+# MAGIC
 # MAGIC > **Bring your own data or use ours:** This lab generates a sample products table
 # MAGIC > by default. If you already have a Delta table you'd like to sync, skip the
 # MAGIC > sample data step and point the configuration at your own table instead.
@@ -27,11 +29,14 @@
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -90,12 +95,18 @@ if not USE_OWN_DATA:
     """)
 
     spark.sql(f"""
-    INSERT INTO {SOURCE_TABLE} VALUES
-        (1, 'Wireless Mouse', 29.99, 'Electronics', current_timestamp()),
-        (2, 'USB-C Adapter', 14.99, 'Accessories', current_timestamp()),
-        (3, 'Laptop Sleeve', 24.99, 'Accessories', current_timestamp()),
-        (4, 'Webcam HD', 59.99, 'Electronics', current_timestamp()),
-        (5, 'Desk Lamp', 34.99, 'Office', current_timestamp())
+    MERGE INTO {SOURCE_TABLE} AS t
+    USING (
+        SELECT * FROM VALUES
+            (1, 'Wireless Mouse', 29.99, 'Electronics', current_timestamp()),
+            (2, 'USB-C Adapter', 14.99, 'Accessories', current_timestamp()),
+            (3, 'Laptop Sleeve', 24.99, 'Accessories', current_timestamp()),
+            (4, 'Webcam HD', 59.99, 'Electronics', current_timestamp()),
+            (5, 'Desk Lamp', 34.99, 'Office', current_timestamp())
+        AS s(product_id, name, price, category, updated_at)
+    ) ON t.product_id = s.product_id
+    WHEN MATCHED THEN UPDATE SET *
+    WHEN NOT MATCHED THEN INSERT *
     """)
     print(f"✓ Sample data created in {SOURCE_TABLE}")
 else:
@@ -109,6 +120,10 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 # MAGIC ## 2. Create the Synced Table
 # MAGIC This sets up a pipeline that continuously (or on trigger) pushes Delta
 # MAGIC changes into the Lakebase PostgreSQL branch.
+# MAGIC
+# MAGIC > **Where does the data land in Lakebase?** Synced tables automatically create a
+# MAGIC > PostgreSQL schema matching the UC schema name. Look for `products_synced` under
+# MAGIC > the `lakebase_lab_<your_username>` schema in Lakebase — not the workshop seed schema from notebook `00` unless you pointed sync there.
 # MAGIC
 # MAGIC **Using your own data?** Update `PRIMARY_KEY_COLUMNS` below to match
 # MAGIC your table's primary key.
@@ -124,23 +139,28 @@ from databricks.sdk.service.postgres import (
 
 PRIMARY_KEY_COLUMNS = ["product_id"]
 
-synced_table = w.postgres.create_synced_table(
-    synced_table=SyncedTable(
-        spec=SyncedTableSyncedTableSpec(
-            branch=f"projects/{PROJECT_ID}/branches/production",
-            postgres_database="databricks_postgres",
-            source_table_full_name=SOURCE_TABLE,
-            primary_key_columns=PRIMARY_KEY_COLUMNS,
-            scheduling_policy=SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy.TRIGGERED,
-            new_pipeline_spec=NewPipelineSpec(
-                storage_catalog=UC_CATALOG,
-                storage_schema=UC_SCHEMA,
+try:
+    existing = w.postgres.get_synced_table(name=f"synced_tables/{SYNCED_TABLE}")
+    print(f"Synced table already exists: {SYNCED_TABLE} (state: {existing.status.detailed_state})")
+    synced_table = existing
+except Exception:
+    synced_table = w.postgres.create_synced_table(
+        synced_table=SyncedTable(
+            spec=SyncedTableSyncedTableSpec(
+                branch=f"projects/{PROJECT_ID}/branches/production",
+                postgres_database="databricks_postgres",
+                source_table_full_name=SOURCE_TABLE,
+                primary_key_columns=PRIMARY_KEY_COLUMNS,
+                scheduling_policy=SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy.TRIGGERED,
+                new_pipeline_spec=NewPipelineSpec(
+                    storage_catalog=UC_CATALOG,
+                    storage_schema=UC_SCHEMA,
+                ),
             ),
         ),
-    ),
-    synced_table_id=SYNCED_TABLE,
-)
-print(f"✓ Synced table created: {SYNCED_TABLE}")
+        synced_table_id=SYNCED_TABLE,
+    )
+    print(f"✓ Synced table created: {SYNCED_TABLE}")
 
 # COMMAND ----------
 
@@ -167,11 +187,17 @@ print(f"Message: {status.status.message or 'N/A'}")
 
 if not USE_OWN_DATA:
     spark.sql(f"""
-    INSERT INTO {SOURCE_TABLE} VALUES
-        (6, 'Standing Desk', 299.99, 'Office', current_timestamp()),
-        (7, 'Monitor Arm', 89.99, 'Accessories', current_timestamp())
+    MERGE INTO {SOURCE_TABLE} AS t
+    USING (
+        SELECT * FROM VALUES
+            (6, 'Standing Desk', 299.99, 'Office', current_timestamp()),
+            (7, 'Monitor Arm', 89.99, 'Accessories', current_timestamp())
+        AS s(product_id, name, price, category, updated_at)
+    ) ON t.product_id = s.product_id
+    WHEN MATCHED THEN UPDATE SET *
+    WHEN NOT MATCHED THEN INSERT *
     """)
-    print("✓ New rows added to sample table.")
+    print("✓ New rows upserted into sample table.")
 else:
     print("Make a change to your source table, then trigger a re-sync.")
 
@@ -187,7 +213,8 @@ print("Trigger a sync from Catalog Explorer → Synced Tables tab, or wait for t
 # MAGIC the Authentication lab and run:
 # MAGIC
 # MAGIC ```sql
-# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
+# MAGIC -- Use the PostgreSQL schema where synced tables land (often the same name as UC_SCHEMA above)
+# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_sync_schema> TO "<SP_CLIENT_ID>";
 # MAGIC ```
 
 # COMMAND ----------
@@ -199,11 +226,11 @@ print("Trigger a sync from Catalog Explorer → Synced Tables tab, or wait for t
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Development Experience** | `labs/platform-administration/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

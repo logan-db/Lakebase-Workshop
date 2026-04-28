@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from './api'
 import {
   LayoutDashboard, TrendingUp, GitBranch, Cpu,
-  Database, RefreshCw, Bot, Terminal, Layers, Sun, Moon, ExternalLink
+  Database, RefreshCw, Bot, Terminal, Layers, Sun, Moon, ExternalLink,
+  Activity, Table
 } from './icons'
 import Dashboard from './pages/Dashboard'
 import BranchManager from './pages/BranchManager'
@@ -13,22 +14,26 @@ import DataPlayground from './pages/DataPlayground'
 import SyncStatus from './pages/SyncStatus'
 import ApiTester from './pages/ApiTester'
 import AgentMemory from './pages/AgentMemory'
+import ObservabilityPage from './pages/ObservabilityPage'
+import OnlineTablesPage from './pages/OnlineTablesPage'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'overview' },
   { id: 'autoscale', label: 'Autoscale Demo', Icon: TrendingUp, section: 'overview' },
+  { id: 'data', label: 'Data Ops', Icon: Database, section: 'labs' },
+  { id: 'observability', label: 'Observability', Icon: Activity, section: 'labs' },
+  { id: 'online-tables', label: 'Online Tables', Icon: Table, section: 'labs' },
+  { id: 'agent', label: 'Agent Memory', Icon: Bot, section: 'labs' },
   { id: 'branches', label: 'Branches', Icon: GitBranch, section: 'manage' },
   { id: 'compute', label: 'Compute', Icon: Cpu, section: 'manage' },
-  { id: 'data', label: 'Data Ops', Icon: Database, section: 'data' },
-  { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'data' },
-  { id: 'agent', label: 'Agent Memory', Icon: Bot, section: 'data' },
+  { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'manage' },
   { id: 'api', label: 'API Tester', Icon: Terminal, section: 'tools' },
 ]
 
 const SECTIONS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'labs', label: 'Labs' },
   { key: 'manage', label: 'Infrastructure' },
-  { key: 'data', label: 'Data & AI' },
   { key: 'tools', label: 'Tools' },
 ]
 
@@ -67,6 +72,8 @@ export default function App() {
       case 'sync': return <SyncStatus config={config} />
       case 'api': return <ApiTester />
       case 'agent': return <AgentMemory />
+      case 'observability': return <ObservabilityPage />
+      case 'online-tables': return <OnlineTablesPage />
       default: return <Dashboard onNavigate={setActivePage} />
     }
   }

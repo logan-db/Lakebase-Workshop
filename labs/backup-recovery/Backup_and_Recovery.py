@@ -13,16 +13,22 @@
 # MAGIC 4. Recover the data by creating a new branch from the snapshot
 # MAGIC 5. Learn about point-in-time recovery (PITR) via the SDK
 # MAGIC
-# MAGIC **Run `00_Setup_Lakebase_Project` first.**
+# MAGIC **Run `00_Setup_Lakebase_Project` first.** Table queries use unqualified names; your schema is set via `search_path` in `_setup`.
+# MAGIC
+# MAGIC **Docs:** [Point-in-time restore](https://docs.databricks.com/aws/en/oltp/projects/point-in-time-restore) |
+# MAGIC [Branches](https://docs.databricks.com/aws/en/oltp/projects/branches)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -54,6 +60,10 @@ from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
 # MAGIC Before making risky changes (schema migration, bulk delete, etc.),
 # MAGIC create a branch as a **named checkpoint**. This is instant and
 # MAGIC costs no additional storage until data diverges.
+# MAGIC
+# MAGIC > **No TTL on snapshots:** Snapshot branches must not have a TTL because
+# MAGIC > Lakebase does not allow creating child branches from branches with an
+# MAGIC > expiration. Delete snapshot branches manually when no longer needed.
 
 # COMMAND ----------
 
@@ -65,7 +75,6 @@ try:
         branch=Branch(
             spec=BranchSpec(
                 source_branch=f"projects/{PROJECT_ID}/branches/production",
-                ttl=Duration(seconds=172800),  # 48 hours
             )
         ),
         branch_id=SNAPSHOT_BRANCH,
@@ -122,7 +131,7 @@ print("✓ Connected to work branch")
 # COMMAND ----------
 
 with work_conn.cursor() as cur:
-    cur.execute("SELECT count(*) AS cnt FROM demo.products")
+    cur.execute("SELECT count(*) AS cnt FROM products")
     print(f"Products before migration: {cur.fetchone()['cnt']}")
 
 # COMMAND ----------
@@ -133,13 +142,13 @@ with work_conn.cursor() as cur:
 # COMMAND ----------
 
 with work_conn.cursor() as cur:
-    cur.execute("DROP TABLE IF EXISTS demo.products CASCADE")
+    cur.execute("DROP TABLE IF EXISTS products CASCADE")
 work_conn.commit()
 print("💥 Products table dropped! (simulated bad migration)")
 
 with work_conn.cursor() as cur:
     try:
-        cur.execute("SELECT count(*) FROM demo.products")
+        cur.execute("SELECT count(*) FROM products")
     except Exception as e:
         print(f"Confirmed: {e}")
 
@@ -182,7 +191,7 @@ time.sleep(10)
 recovery_conn = get_connection(RECOVERY_BRANCH)
 
 with recovery_conn.cursor() as cur:
-    cur.execute("SELECT count(*) AS cnt FROM demo.products")
+    cur.execute("SELECT count(*) AS cnt FROM products")
     count = cur.fetchone()['cnt']
     print(f"✓ Products on recovered branch: {count}")
     print("  Data is fully intact — recovered from snapshot!")
@@ -276,11 +285,11 @@ recovery_conn.close()
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Development Experience** | `labs/platform-administration/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

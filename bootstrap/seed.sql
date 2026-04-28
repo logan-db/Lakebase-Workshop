@@ -1,11 +1,11 @@
--- Lakebase Workshop: Demo Schema Seed
+-- Lakebase Workshop: Schema Seed
 -- Idempotent -- safe to run multiple times
 -- Source of truth: notebooks/00_Setup_Lakebase_Project reads this file at runtime.
 
-CREATE SCHEMA IF NOT EXISTS demo;
+CREATE SCHEMA IF NOT EXISTS {schema};
 
 -- Products table
-CREATE TABLE IF NOT EXISTS demo.products (
+CREATE TABLE IF NOT EXISTS {schema}.products (
     product_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS demo.products (
 );
 
 -- Events table (for load testing and CRUD demos)
-CREATE TABLE IF NOT EXISTS demo.events (
+CREATE TABLE IF NOT EXISTS {schema}.events (
     event_id SERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL,
     source VARCHAR(100),
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS demo.events (
 );
 
 -- Agent sessions (for agent memory lab)
-CREATE TABLE IF NOT EXISTS demo.agent_sessions (
+CREATE TABLE IF NOT EXISTS {schema}.agent_sessions (
     session_id VARCHAR(64) PRIMARY KEY,
     agent_name VARCHAR(100) NOT NULL,
     metadata JSONB DEFAULT '{}'::jsonb,
@@ -36,18 +36,30 @@ CREATE TABLE IF NOT EXISTS demo.agent_sessions (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Agent messages (for agent memory lab)
-CREATE TABLE IF NOT EXISTS demo.agent_messages (
+-- Agent messages (short-term memory — conversation history per thread)
+CREATE TABLE IF NOT EXISTS {schema}.agent_messages (
     message_id SERIAL PRIMARY KEY,
-    session_id VARCHAR(64) NOT NULL REFERENCES demo.agent_sessions(session_id) ON DELETE CASCADE,
+    session_id VARCHAR(64) NOT NULL REFERENCES {schema}.agent_sessions(session_id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
     content TEXT NOT NULL,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Agent memory store (long-term memory — extracted knowledge across sessions)
+CREATE TABLE IF NOT EXISTS {schema}.agent_memory_store (
+    memory_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    topic VARCHAR(255) NOT NULL,
+    memory TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, topic)
+);
+
 -- Audit log (tracks changes across tables)
-CREATE TABLE IF NOT EXISTS demo.audit_log (
+CREATE TABLE IF NOT EXISTS {schema}.audit_log (
     audit_id SERIAL PRIMARY KEY,
     table_name VARCHAR(100) NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
@@ -59,16 +71,17 @@ CREATE TABLE IF NOT EXISTS demo.audit_log (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_events_type ON demo.events(event_type);
-CREATE INDEX IF NOT EXISTS idx_events_created ON demo.events(created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_session ON demo.agent_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_products_category ON demo.products(category);
-CREATE INDEX IF NOT EXISTS idx_products_tags ON demo.products USING GIN(tags);
-CREATE INDEX IF NOT EXISTS idx_audit_table ON demo.audit_log(table_name);
+CREATE INDEX IF NOT EXISTS idx_events_type ON {schema}.events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created ON {schema}.events(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON {schema}.agent_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_memory_user ON {schema}.agent_memory_store(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON {schema}.products(category);
+CREATE INDEX IF NOT EXISTS idx_products_tags ON {schema}.products USING GIN(tags);
+CREATE INDEX IF NOT EXISTS idx_audit_table ON {schema}.audit_log(table_name);
 
 -- Audit trigger function
 -- Uses JSONB extraction to get the PK value, since each table has a different PK column name
-CREATE OR REPLACE FUNCTION demo.audit_trigger_fn()
+CREATE OR REPLACE FUNCTION {schema}.audit_trigger_fn()
 RETURNS TRIGGER AS $$
 DECLARE
     pk_col TEXT;
@@ -83,17 +96,17 @@ BEGIN
 
     IF TG_OP = 'INSERT' THEN
         rec_id := (row_to_json(NEW)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, new_data)
+        INSERT INTO {schema}.audit_log (table_name, operation, record_id, new_data)
         VALUES (TG_TABLE_NAME, 'INSERT', rec_id, row_to_json(NEW)::jsonb);
         RETURN NEW;
     ELSIF TG_OP = 'UPDATE' THEN
         rec_id := (row_to_json(NEW)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, old_data, new_data)
+        INSERT INTO {schema}.audit_log (table_name, operation, record_id, old_data, new_data)
         VALUES (TG_TABLE_NAME, 'UPDATE', rec_id, row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
         rec_id := (row_to_json(OLD)::jsonb ->> pk_col)::int;
-        INSERT INTO demo.audit_log (table_name, operation, record_id, old_data)
+        INSERT INTO {schema}.audit_log (table_name, operation, record_id, old_data)
         VALUES (TG_TABLE_NAME, 'DELETE', rec_id, row_to_json(OLD)::jsonb);
         RETURN OLD;
     END IF;
@@ -102,18 +115,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Attach audit triggers (idempotent via DROP IF EXISTS)
-DROP TRIGGER IF EXISTS trg_audit_products ON demo.products;
+DROP TRIGGER IF EXISTS trg_audit_products ON {schema}.products;
 CREATE TRIGGER trg_audit_products
-    AFTER INSERT OR UPDATE OR DELETE ON demo.products
-    FOR EACH ROW EXECUTE FUNCTION demo.audit_trigger_fn();
+    AFTER INSERT OR UPDATE OR DELETE ON {schema}.products
+    FOR EACH ROW EXECUTE FUNCTION {schema}.audit_trigger_fn();
 
-DROP TRIGGER IF EXISTS trg_audit_events ON demo.events;
+DROP TRIGGER IF EXISTS trg_audit_events ON {schema}.events;
 CREATE TRIGGER trg_audit_events
-    AFTER INSERT OR UPDATE OR DELETE ON demo.events
-    FOR EACH ROW EXECUTE FUNCTION demo.audit_trigger_fn();
+    AFTER INSERT OR UPDATE OR DELETE ON {schema}.events
+    FOR EACH ROW EXECUTE FUNCTION {schema}.audit_trigger_fn();
 
 -- Seed sample products (skip if already seeded)
-INSERT INTO demo.products (name, description, price, stock_quantity, category, tags, metadata)
+INSERT INTO {schema}.products (name, description, price, stock_quantity, category, tags, metadata)
 SELECT * FROM (VALUES
     ('Wireless Headphones', 'Bluetooth 5.3 with ANC', 79.99, 150, 'Electronics',
      ARRAY['audio', 'bluetooth', 'featured'], '{"brand": "SoundMax", "color": "black"}'::jsonb),
@@ -132,4 +145,4 @@ SELECT * FROM (VALUES
     ('Data Engineering Book', 'Fundamentals of Data Engineering', 54.99, 85, 'Books',
      ARRAY['data', 'engineering', 'featured'], '{"author": "J. Reis", "pages": 450}'::jsonb)
 ) AS seed(name, description, price, stock_quantity, category, tags, metadata)
-WHERE NOT EXISTS (SELECT 1 FROM demo.products LIMIT 1);
+WHERE NOT EXISTS (SELECT 1 FROM {schema}.products LIMIT 1);

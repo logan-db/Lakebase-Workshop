@@ -27,7 +27,7 @@ _READ_QUERIES = [
         "SELECT event_type, count(*) AS cnt, "
         "avg(length(payload::text)) AS avg_size, "
         "sum(length(payload::text)) AS total_payload_bytes "
-        "FROM demo.events GROUP BY event_type ORDER BY cnt DESC",
+        "FROM events GROUP BY event_type ORDER BY cnt DESC",
         "agg_by_type",
     ),
     (
@@ -35,13 +35,13 @@ _READ_QUERIES = [
         "avg(length(payload::text)) AS avg_payload, "
         "sum(length(payload::text)) AS total_bytes, "
         "min(created_at) AS earliest, max(created_at) AS latest "
-        "FROM demo.events",
+        "FROM events",
         "full_stats",
     ),
     (
         "SELECT source, event_type, count(*) AS cnt, "
         "avg(length(payload::text)) AS avg_payload "
-        "FROM demo.events GROUP BY source, event_type "
+        "FROM events GROUP BY source, event_type "
         "ORDER BY cnt DESC LIMIT 200",
         "agg_source_type",
     ),
@@ -49,7 +49,7 @@ _READ_QUERIES = [
         "SELECT date_trunc('minute', created_at) AS minute, "
         "count(*) AS cnt, count(DISTINCT event_type) AS types, "
         "avg(length(payload::text)) AS avg_payload "
-        "FROM demo.events GROUP BY 1 ORDER BY 1 DESC LIMIT 200",
+        "FROM events GROUP BY 1 ORDER BY 1 DESC LIMIT 200",
         "time_series",
     ),
     (
@@ -57,12 +57,12 @@ _READ_QUERIES = [
         "percentile_cont(0.5) WITHIN GROUP (ORDER BY event_id) AS median_id, "
         "percentile_cont(0.95) WITHIN GROUP (ORDER BY event_id) AS p95_id, "
         "count(*) AS cnt "
-        "FROM demo.events GROUP BY event_type",
+        "FROM events GROUP BY event_type",
         "percentile",
     ),
     (
-        "SELECT count(*) AS total FROM demo.events e "
-        "JOIN demo.audit_log a ON a.record_id = e.event_id "
+        "SELECT count(*) AS total FROM events e "
+        "JOIN audit_log a ON a.record_id = e.event_id "
         "AND a.table_name = 'events'",
         "cross_join",
     ),
@@ -71,13 +71,13 @@ _READ_QUERIES = [
         "row_number() OVER (PARTITION BY event_type ORDER BY created_at DESC) AS rn, "
         "count(*) OVER (PARTITION BY event_type) AS type_cnt, "
         "lag(event_id, 1) OVER (ORDER BY event_id) AS prev_id "
-        "FROM demo.events ORDER BY event_id DESC LIMIT 5000",
+        "FROM events ORDER BY event_id DESC LIMIT 5000",
         "window_funcs",
     ),
     (
         "SELECT md5(string_agg(payload::text, '' ORDER BY random())) AS hash_val, "
         "count(*) AS rows_hashed "
-        "FROM (SELECT payload FROM demo.events ORDER BY random() LIMIT 5000) sub",
+        "FROM (SELECT payload FROM events ORDER BY random() LIMIT 5000) sub",
         "random_sort_hash",
     ),
 ]
@@ -141,7 +141,7 @@ def _run_write_query(branch_id: str | None, batch_size: int):
         with get_pooled_connection(branch_id) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO demo.events (event_type, source, payload) "
+                    "INSERT INTO events (event_type, source, payload) "
                     "SELECT 'loadtest', 'lab-console', "
                     "jsonb_build_object("
                     "  'ts', extract(epoch from now()), "

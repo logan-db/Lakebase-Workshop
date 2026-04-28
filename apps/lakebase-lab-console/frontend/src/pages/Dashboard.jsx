@@ -3,7 +3,7 @@ import { api } from '../api'
 import {
   Zap, GitBranch, Database, TrendingUp, Activity,
   Server, Bot, RefreshCw, Terminal, BookOpen,
-  ExternalLink, Cpu, Table
+  ExternalLink, Cpu, Table, Layers
 } from '../icons'
 
 function cleanState(raw) {
@@ -75,7 +75,7 @@ export default function Dashboard({ onNavigate }) {
         </div>
         <div className="status-banner-right">
           <span className="badge badge-info">{config?.branch_id || 'production'}</span>
-          <span className="badge badge-teal">{config?.schema || 'demo'}</span>
+          <span className="badge badge-teal">{config?.schema || '...'}</span>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ export default function Dashboard({ onNavigate }) {
               <tbody>
                 {Object.entries(stats).map(([name, count]) => (
                   <tr key={name}>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>demo.{name}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{config?.schema || ''}.{name}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {count >= 0 ? count.toLocaleString() : <span className="badge badge-danger">error</span>}
                     </td>
@@ -207,15 +207,20 @@ export default function Dashboard({ onNavigate }) {
             <div className="qa-title">Agent Memory</div>
             <div className="qa-desc">Persistent AI agent session and message storage</div>
           </button>
+          <button className="quick-action-card" onClick={() => onNavigate('observability')}>
+            <div className="qa-icon"><Activity size={20} /></div>
+            <div className="qa-title">Observability</div>
+            <div className="qa-desc">PostgreSQL diagnostics, pg_stat views, connection pool</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('online-tables')}>
+            <div className="qa-icon"><Layers size={20} /></div>
+            <div className="qa-title">Online Tables</div>
+            <div className="qa-desc">Feature stores, synced tables, and reverse ETL status</div>
+          </button>
           <button className="quick-action-card" onClick={() => onNavigate('compute')}>
             <div className="qa-icon"><Cpu size={20} /></div>
             <div className="qa-title">Compute Config</div>
             <div className="qa-desc">Configure compute CU limits and view endpoints</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
-            <div className="qa-icon"><RefreshCw size={20} /></div>
-            <div className="qa-title">Reverse ETL</div>
-            <div className="qa-desc">Sync Delta Lake tables into Lakebase</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('api')}>
             <div className="qa-icon"><Terminal size={20} /></div>

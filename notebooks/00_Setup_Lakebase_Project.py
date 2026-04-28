@@ -3,7 +3,7 @@
 # MAGIC # 00 — Set Up Your Lakebase Autoscaling Project
 # MAGIC
 # MAGIC This notebook creates your Lakebase Autoscaling project, waits for the
-# MAGIC endpoint to become active, and seeds the demo schema with sample data.
+# MAGIC endpoint to become active, and seeds a per-user schema with sample data.
 # MAGIC
 # MAGIC **Run this notebook once** before starting any of the workshop labs.
 # MAGIC
@@ -13,7 +13,7 @@
 # MAGIC | **Project** | `lakebase-lab-<your-username>` |
 # MAGIC | **Branch** | `production` (auto-created, default) |
 # MAGIC | **Compute** | Autoscaling endpoint (0.5+ CU) |
-# MAGIC | **Schema** | `demo` with 5 tables: products, events, agent_sessions, agent_messages, audit_log |
+# MAGIC | **Schema** | `lakebase_lab_<your_username>` with 6 tables: products, events, agent_sessions, agent_messages, agent_memory_store, audit_log |
 # MAGIC | **Sample data** | 8 products with JSONB metadata, array tags, and audit triggers |
 
 # COMMAND ----------
@@ -49,6 +49,9 @@
 # MAGIC | **Reverse ETL** | Sync Delta Lake tables into PostgreSQL via synced tables |
 # MAGIC | **Unity Catalog Integration** | Projects and access governed by workspace IAM |
 # MAGIC
+# MAGIC **Docs:** [What is Lakebase Autoscaling?](https://docs.databricks.com/aws/en/oltp/projects/about) |
+# MAGIC [Get started with Lakebase](https://docs.databricks.com/aws/en/oltp/projects/get-started)
+# MAGIC
 # MAGIC ### How It Fits in the Databricks Platform
 # MAGIC
 # MAGIC ```
@@ -78,7 +81,10 @@
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -101,10 +107,12 @@ def sanitize(email):
     return re.sub(r"-+", "-", name).strip("-")
 
 PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
+PG_SCHEMA  = f"lakebase_lab_{sanitize(user_email).replace('-', '_')}"
 PG_VERSION = "17"
 
 print(f"User:       {user_email}")
 print(f"Project ID: {PROJECT_ID}")
+print(f"PG Schema:  {PG_SCHEMA}")
 
 # COMMAND ----------
 
@@ -173,8 +181,9 @@ if not endpoint:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 4: Connect and Seed the Demo Schema
-# MAGIC Creates 5 tables, indexes, audit triggers, and inserts 8 sample products.
+# MAGIC ## Step 4: Connect and Seed the Schema
+# MAGIC Creates 6 tables, indexes, audit triggers, and inserts 8 sample products
+# MAGIC in a per-user schema (`lakebase_lab_<your_username>`).
 
 # COMMAND ----------
 
@@ -197,14 +206,15 @@ project_root = os.path.dirname(os.path.dirname(f"/Workspace{notebook_path}"))
 seed_path = os.path.join(project_root, "bootstrap", "seed.sql")
 
 with open(seed_path) as f:
-    SEED_SQL = f.read()
+    SEED_SQL = f.read().replace("{schema}", PG_SCHEMA)
 
 print(f"Loaded seed SQL from: bootstrap/seed.sql ({len(SEED_SQL)} chars)")
+print(f"Target schema: {PG_SCHEMA}")
 
 with conn.cursor() as cur:
     cur.execute(SEED_SQL)
 conn.commit()
-print("✓ Demo schema created and seeded")
+print(f"✓ Schema {PG_SCHEMA} created and seeded")
 
 # COMMAND ----------
 
@@ -220,11 +230,11 @@ params["password"] = cred.token
 
 with psycopg.connect(**params, row_factory=dict_row) as verify_conn:
     with verify_conn.cursor() as cur:
-        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'demo' ORDER BY table_name")
+        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s ORDER BY table_name", [PG_SCHEMA])
         tables = [r["table_name"] for r in cur.fetchall()]
-        print(f"Tables in demo schema: {tables}")
+        print(f"Tables in {PG_SCHEMA} schema: {tables}")
 
-        cur.execute("SELECT count(*) as cnt FROM demo.products")
+        cur.execute(f"SELECT count(*) as cnt FROM {PG_SCHEMA}.products")
         cnt = cur.fetchone()["cnt"]
         print(f"Products seeded: {cnt}")
 
@@ -250,11 +260,13 @@ print(f"  Project ID:    {PROJECT_ID}")
 print(f"  Endpoint:      {endpoint.name}")
 print(f"  Host:          {endpoint.status.hosts.host}")
 print(f"  Database:      databricks_postgres")
-print(f"  Schema:        demo")
+print(f"  Schema:        {PG_SCHEMA}")
 print(f"  Username:      {user_email}")
 print("=" * 60)
 print()
-print(f"  For app.yaml, set LAKEBASE_PROJECT_ID to: {PROJECT_ID}")
+print(f"  For app.yaml:")
+print(f"    LAKEBASE_PROJECT_ID: {PROJECT_ID}")
+print(f"    LAKEBASE_SCHEMA:     {PG_SCHEMA}")
 
 # COMMAND ----------
 

@@ -18,11 +18,14 @@
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -45,6 +48,8 @@ ENDPOINT_NAME = get_endpoint_name()
 # MAGIC A user can have workspace permissions to manage branches but no access
 # MAGIC to the data inside them — and vice versa. Both layers must be configured
 # MAGIC for full access.
+# MAGIC
+# MAGIC **Docs:** [Roles and permissions](https://docs.databricks.com/aws/en/oltp/projects/roles-permissions)
 
 # COMMAND ----------
 
@@ -53,7 +58,10 @@ ENDPOINT_NAME = get_endpoint_name()
 # MAGIC
 # MAGIC Lakebase uses **OAuth tokens** (not static passwords) for database
 # MAGIC authentication. Tokens are generated via the Databricks SDK and have
-# MAGIC a **1-hour TTL**.
+# MAGIC a **1-hour TTL**. Open connections remain active even after token expiry —
+# MAGIC expiration is only enforced at login.
+# MAGIC
+# MAGIC **Docs:** [Authentication](https://docs.databricks.com/aws/en/oltp/projects/authentication)
 
 # COMMAND ----------
 
@@ -92,23 +100,65 @@ if len(parts) >= 2:
 # MAGIC - `iss` = your workspace's OIDC endpoint
 # MAGIC - The token is **not a static password** — it rotates automatically
 # MAGIC
-# MAGIC ### Token Refresh Pattern
+# MAGIC ### Token Rotation in Production
 # MAGIC
-# MAGIC In production applications, you must refresh the token before it
-# MAGIC expires. Here's the standard pattern:
+# MAGIC OAuth tokens expire after one hour. Applications that maintain long-running
+# MAGIC database connections must implement token rotation. There are two recommended
+# MAGIC approaches:
+# MAGIC
+# MAGIC **Option 1: psycopg3 Connection Pool** — generates a fresh token for each
+# MAGIC new connection from the pool:
 # MAGIC
 # MAGIC ```python
+# MAGIC from databricks.sdk import WorkspaceClient
+# MAGIC import psycopg
+# MAGIC from psycopg_pool import ConnectionPool
+# MAGIC
+# MAGIC w = WorkspaceClient()
+# MAGIC
+# MAGIC class CustomConnection(psycopg.Connection):
+# MAGIC     @classmethod
+# MAGIC     def connect(cls, conninfo='', **kwargs):
+# MAGIC         endpoint = "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
+# MAGIC         credential = w.postgres.generate_database_credential(endpoint=endpoint)
+# MAGIC         kwargs['password'] = credential.token
+# MAGIC         return super().connect(conninfo, **kwargs)
+# MAGIC
+# MAGIC pool = ConnectionPool(
+# MAGIC     conninfo=f"dbname=databricks_postgres user={username} host={host} sslmode=require",
+# MAGIC     connection_class=CustomConnection,
+# MAGIC     min_size=1,
+# MAGIC     max_size=10,
+# MAGIC     open=True,
+# MAGIC )
+# MAGIC ```
+# MAGIC
+# MAGIC **Option 2: SQLAlchemy** — uses an event listener to refresh the token
+# MAGIC before it expires (2-minute buffer):
+# MAGIC
+# MAGIC ```python
+# MAGIC from databricks.sdk import WorkspaceClient
+# MAGIC from sqlalchemy import create_engine, event
 # MAGIC import time
 # MAGIC
-# MAGIC token_info = {"token": None, "expires_at": 0}
+# MAGIC w = WorkspaceClient()
+# MAGIC endpoint = "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
+# MAGIC engine = create_engine(f"postgresql+psycopg://{username}:@{host}:5432/databricks_postgres?sslmode=require")
 # MAGIC
-# MAGIC def get_fresh_token():
-# MAGIC     if time.time() > token_info["expires_at"] - 300:  # 5 min buffer
-# MAGIC         cred = w.postgres.generate_database_credential(endpoint=ENDPOINT_NAME)
-# MAGIC         token_info["token"] = cred.token
-# MAGIC         token_info["expires_at"] = cred.expire_time.timestamp()
-# MAGIC     return token_info["token"]
+# MAGIC postgres_password = None
+# MAGIC token_expiry = 0.0
+# MAGIC
+# MAGIC @event.listens_for(engine, "do_connect")
+# MAGIC def provide_token(dialect, conn_rec, cargs, cparams):
+# MAGIC     global postgres_password, token_expiry
+# MAGIC     if postgres_password is None or time.time() >= token_expiry - 120:
+# MAGIC         credential = w.postgres.generate_database_credential(endpoint=endpoint)
+# MAGIC         postgres_password = credential.token
+# MAGIC         token_expiry = credential.expire_time.seconds
+# MAGIC     cparams["password"] = postgres_password
 # MAGIC ```
+# MAGIC
+# MAGIC **Docs:** [Token rotation examples](https://docs.databricks.com/aws/en/oltp/projects/authentication#token-rotation-examples)
 
 # COMMAND ----------
 
@@ -164,45 +214,48 @@ with conn.cursor() as cur:
 # MAGIC ### Grant Schema Access to Another User
 # MAGIC
 # MAGIC ```sql
-# MAGIC -- Grant read access
-# MAGIC GRANT USAGE ON SCHEMA demo TO "colleague@company.com";
-# MAGIC GRANT SELECT ON ALL TABLES IN SCHEMA demo TO "colleague@company.com";
+# MAGIC -- Grant read access (replace <your_schema> with your Lakebase schema, e.g. PG_SCHEMA from notebook 00)
+# MAGIC GRANT USAGE ON SCHEMA <your_schema> TO "colleague@company.com";
+# MAGIC GRANT SELECT ON ALL TABLES IN SCHEMA <your_schema> TO "colleague@company.com";
 # MAGIC
 # MAGIC -- Grant read + write access
-# MAGIC GRANT ALL ON SCHEMA demo TO "colleague@company.com";
-# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA demo TO "colleague@company.com";
-# MAGIC GRANT USAGE ON ALL SEQUENCES IN SCHEMA demo TO "colleague@company.com";
+# MAGIC GRANT ALL ON SCHEMA <your_schema> TO "colleague@company.com";
+# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "colleague@company.com";
+# MAGIC GRANT USAGE ON ALL SEQUENCES IN SCHEMA <your_schema> TO "colleague@company.com";
 # MAGIC ```
 # MAGIC
 # MAGIC ### Grant Access to a Service Principal (for Apps)
 # MAGIC
 # MAGIC When deploying a Databricks App, the app runs as a Service Principal.
-# MAGIC You must grant the SP access to your data:
+# MAGIC You must grant the SP access to your data.
+# MAGIC
+# MAGIC **Docs:** [Manage roles](https://docs.databricks.com/aws/en/oltp/projects/manage-roles) |
+# MAGIC [Connect a Databricks App to Lakebase](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling)
 # MAGIC
 # MAGIC ```sql
-# MAGIC GRANT ALL ON SCHEMA demo TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 # MAGIC
 # MAGIC -- For future tables (so new tables are automatically accessible)
-# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA demo
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
 # MAGIC     GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
-# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA demo
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
 # MAGIC     GRANT USAGE ON SEQUENCES TO "<SP_CLIENT_ID>";
 # MAGIC ```
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Check Existing Grants on the Demo Schema
+# MAGIC ### Check Existing Grants on Your Schema
 
 # COMMAND ----------
 
 with conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(f"""
         SELECT grantee, privilege_type, table_name
         FROM information_schema.table_privileges
-        WHERE table_schema = 'demo'
+        WHERE table_schema = '{PG_SCHEMA}'
         ORDER BY table_name, grantee, privilege_type
     """)
     rows = cur.fetchall()
@@ -276,11 +329,11 @@ conn.close()
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Development Experience** | `labs/platform-administration/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

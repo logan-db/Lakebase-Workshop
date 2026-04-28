@@ -22,15 +22,23 @@
 # MAGIC - **This notebook** — uses `psycopg` to connect via the Databricks SDK (run the cells below)
 # MAGIC - **Lakebase SQL Editor** — open the SQL editor in the Databricks UI for your Lakebase instance and run queries directly
 # MAGIC - **psql / any PostgreSQL client** — connect with your endpoint host and credentials
+# MAGIC
+# MAGIC Lab connections set PostgreSQL `search_path` to **your user schema** (the same name as `PG_SCHEMA` from notebook `00`). SQL in this notebook uses unqualified table names; they resolve to that schema.
+# MAGIC
+# MAGIC **Docs:** [SQL Editor](https://docs.databricks.com/aws/en/oltp/projects/sql-editor) |
+# MAGIC [Postgres clients](https://docs.databricks.com/aws/en/oltp/projects/postgres-clients)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -48,7 +56,7 @@ print(f"✓ Connected to {PROJECT_ID} / production")
 with conn.cursor() as cur:
     cur.execute("""
         SELECT name, price, metadata->>'brand' AS brand, metadata->>'color' AS color
-        FROM demo.products
+        FROM products
         WHERE metadata @> '{"brand": "SoundMax"}'
     """)
     for row in cur.fetchall():
@@ -64,7 +72,7 @@ with conn.cursor() as cur:
 
 with conn.cursor() as cur:
     cur.execute("""
-        UPDATE demo.products
+        UPDATE products
         SET metadata = metadata || '{"on_sale": true, "discount_pct": 15}'::jsonb
         WHERE category = 'Electronics'
         RETURNING name, metadata
@@ -85,7 +93,7 @@ print("✓ Metadata updated")
 
 with conn.cursor() as cur:
     cur.execute("""
-        SELECT name, tags FROM demo.products
+        SELECT name, tags FROM products
         WHERE 'featured' = ANY(tags)
     """)
     for row in cur.fetchall():
@@ -95,7 +103,7 @@ with conn.cursor() as cur:
 
 with conn.cursor() as cur:
     cur.execute("""
-        SELECT name, tags FROM demo.products
+        SELECT name, tags FROM products
         WHERE tags && ARRAY['audio', 'gaming']
     """)
     print("Products matching ANY of ['audio', 'gaming']:")
@@ -111,7 +119,7 @@ with conn.cursor() as cur:
 
 with conn.cursor() as cur:
     cur.execute("""
-        INSERT INTO demo.products (name, description, price, stock_quantity, category, tags, metadata)
+        INSERT INTO products (name, description, price, stock_quantity, category, tags, metadata)
         VALUES ('Workshop Notebook', 'Created during the lab', 19.99, 50, 'Office',
                 ARRAY['workshop', 'demo'], '{"source": "notebook-03"}'::jsonb)
         RETURNING product_id, name
@@ -124,7 +132,7 @@ conn.commit()
 
 with conn.cursor() as cur:
     cur.execute("""
-        UPDATE demo.products SET price = 14.99
+        UPDATE products SET price = 14.99
         WHERE name = 'Workshop Notebook'
         RETURNING product_id, name, price
     """)
@@ -135,7 +143,7 @@ conn.commit()
 
 with conn.cursor() as cur:
     cur.execute("""
-        DELETE FROM demo.products
+        DELETE FROM products
         WHERE name = 'Workshop Notebook'
         RETURNING product_id, name
     """)
@@ -155,7 +163,7 @@ with conn.cursor() as cur:
     cur.execute("""
         SELECT table_name, operation, COUNT(*) AS cnt,
                MIN(created_at) AS first, MAX(created_at) AS last
-        FROM demo.audit_log
+        FROM audit_log
         GROUP BY table_name, operation
         ORDER BY table_name, operation
     """)
@@ -170,7 +178,7 @@ with conn.cursor() as cur:
         SELECT audit_id, table_name, operation,
                old_data->>'name' AS old_name, new_data->>'name' AS new_name,
                created_at
-        FROM demo.audit_log
+        FROM audit_log
         ORDER BY created_at DESC LIMIT 10
     """)
     print("Recent audit entries:")
@@ -188,33 +196,35 @@ with conn.cursor() as cur:
 
 with conn.cursor() as cur:
     cur.execute("""
-        INSERT INTO demo.events (event_type, source, payload)
+        INSERT INTO events (event_type, source, payload)
         VALUES ('transaction_demo', 'notebook-03', '{"step": 1}')
     """)
     cur.execute("""
-        INSERT INTO demo.events (event_type, source, payload)
+        INSERT INTO events (event_type, source, payload)
         VALUES ('transaction_demo', 'notebook-03', '{"step": 2}')
     """)
 conn.commit()
 print("✓ Transaction committed — both rows saved atomically")
 
 with conn.cursor() as cur:
-    cur.execute("SELECT count(*) AS cnt FROM demo.events WHERE event_type = 'transaction_demo'")
+    cur.execute("SELECT count(*) AS cnt FROM events WHERE event_type = 'transaction_demo'")
     print(f"  Transaction rows: {cur.fetchone()['cnt']}")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 6. Database Statistics
+# MAGIC
+# MAGIC The table-size query filters `pg_tables` by your schema name (`PG_SCHEMA`), matching the workshop seed tables.
 
 # COMMAND ----------
 
 with conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(f"""
         SELECT schemaname, tablename,
                pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) AS total_size,
                pg_size_pretty(pg_relation_size(schemaname || '.' || tablename)) AS data_size
-        FROM pg_tables WHERE schemaname = 'demo'
+        FROM pg_tables WHERE schemaname = '{PG_SCHEMA}'
         ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC
     """)
     print("Table sizes:")
@@ -247,11 +257,11 @@ conn.close()
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Development Experience** | `labs/platform-administration/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis — richer after running this lab |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis — richer after running this lab |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

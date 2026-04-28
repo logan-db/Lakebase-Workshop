@@ -18,7 +18,7 @@ Before the workshop:
 
 | Notebook | Location | What It Does |
 |----------|----------|--------------|
-| `00_Setup_Lakebase_Project` | `notebooks/` | Create project, seed demo schema (5 tables, 8 products) |
+| `00_Setup_Lakebase_Project` | `notebooks/` | Create project, seed user schema (6 tables, 8 products) |
 
 ### Participant Tracks
 
@@ -182,7 +182,7 @@ done
 
 ### 3. Run the foundation
 
-Each participant opens `notebooks/00_Setup_Lakebase_Project` and clicks **Run All**. This creates their personal Lakebase project (`lakebase-lab-<username>`) and seeds the demo schema.
+Each participant opens `notebooks/00_Setup_Lakebase_Project` and clicks **Run All**. This creates their personal Lakebase project (`lakebase-lab-<username>`) and seeds a per-user schema (`lakebase_lab_<username>`).
 
 ### 4. Choose lab paths
 

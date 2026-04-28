@@ -28,3 +28,8 @@ Deploy the Lab Console — a full-stack React + FastAPI application that uses La
 ## Notes
 
 This path is best done after exploring other lab paths, since the app ties together all the features covered across the workshop. See `docs/PERMISSIONS.md` for Service Principal grants required by the app.
+
+## Documentation
+
+- [Connect an application](https://docs.databricks.com/aws/en/oltp/projects/connect-application)
+- [Databricks Apps tutorial (Lakebase)](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling)

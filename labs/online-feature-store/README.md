@@ -42,3 +42,8 @@ Online Feature Store (Lakebase Autoscaling)
 - Online stores incur costs continuously — delete them when not in use
 - Start with `CU_1` for testing, scale up only when needed
 - Multiple feature tables can share a single online store
+
+## Documentation
+
+- [Feature Serving endpoints](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-serving-endpoints)
+- [Online Feature Store (Lakebase)](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)

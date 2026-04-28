@@ -13,15 +13,22 @@
 # MAGIC 4. Learn about scale-to-zero behavior
 # MAGIC
 # MAGIC **Run `00_Setup_Lakebase_Project` first.**
+# MAGIC
+# MAGIC **Docs:** [Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/autoscaling) |
+# MAGIC [Scale to zero](https://docs.databricks.com/aws/en/oltp/projects/scale-to-zero) |
+# MAGIC [Manage computes](https://docs.databricks.com/aws/en/oltp/projects/manage-computes)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -124,11 +131,11 @@ for ep_summary in endpoints:
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

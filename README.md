@@ -46,11 +46,11 @@ This workshop follows a **foundation + choose-your-path** model:
 
 ### Foundation (required)
 
-Run this first — it creates your Lakebase project and seeds the demo schema:
+Run this first — it creates your Lakebase project and seeds your schema:
 
 | Notebook | What It Does |
 |----------|--------------|
-| `notebooks/00_Setup_Lakebase_Project` | Create project, wait for endpoint, seed 5 tables with sample data |
+| `notebooks/00_Setup_Lakebase_Project` | Create project, wait for endpoint, seed 6 tables with sample data |
 
 ### Lab Paths (choose your adventure)
 
@@ -106,7 +106,7 @@ Your content will be at:
 
 ### Step 2: Run the foundation
 
-Open **`00_Setup_Lakebase_Project`** and click **Run All**. It creates your Lakebase project, waits for the endpoint, and seeds the demo schema.
+Open **`00_Setup_Lakebase_Project`** and click **Run All**. It creates your Lakebase project, waits for the endpoint, and seeds your user schema (`lakebase_lab_<your_username>`).
 
 ### Step 3: Pick a path
 
@@ -200,7 +200,8 @@ Lakebase-Workshop/
 
 ## Resources
 
-- [Databricks Lakebase Documentation](https://docs.databricks.com/en/lakebase/index.html)
+- [Lakebase Autoscaling Documentation](https://docs.databricks.com/aws/en/oltp/projects/)
+- [Get started with Lakebase](https://docs.databricks.com/aws/en/oltp/projects/get-started)
 - [Databricks Apps Documentation](https://docs.databricks.com/en/dev-tools/databricks-apps/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 

@@ -379,7 +379,7 @@ export default function AutoscaleDemo() {
                   <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Full-Table Scans</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Aggregations, GROUP BY, and range scans on <code style={{ color: 'var(--blue)' }}>demo.events</code> that force sequential scans and push CPU
+                  Aggregations, GROUP BY, and range scans on <code style={{ color: 'var(--blue)' }}>events</code> that force sequential scans and push CPU
                 </p>
                 <div className="rw-stats">
                   <div>
@@ -410,7 +410,7 @@ export default function AutoscaleDemo() {
                   <span className="badge badge-accent" style={{ marginLeft: 'auto' }}>Batch INSERT</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Batch inserts of {metrics.write_batch_size || 100} rows via <code style={{ color: 'var(--accent)' }}>generate_series</code> into <code style={{ color: 'var(--accent)' }}>demo.events</code> (each row also fires the audit trigger)
+                  Batch inserts of {metrics.write_batch_size || 100} rows via <code style={{ color: 'var(--accent)' }}>generate_series</code> into <code style={{ color: 'var(--accent)' }}>events</code> (each row also fires the audit trigger)
                 </p>
                 <div className="rw-stats">
                   <div>
@@ -653,7 +653,7 @@ export default function AutoscaleDemo() {
                 </div>
                 <div className="explainer-text">
                   <h4>Heavy Reads (CPU-Intensive)</h4>
-                  <p>Reads cycle through random sorts, md5 hashing, window functions, percentiles, and JSONB ops that hammer CPU and memory on every row in <code>demo.events</code>.</p>
+                  <p>Reads cycle through random sorts, md5 hashing, window functions, percentiles, and JSONB ops that hammer CPU and memory on every row in <code>events</code>.</p>
                 </div>
               </div>
               <div className="explainer-item">

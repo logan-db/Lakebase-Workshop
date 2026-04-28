@@ -12,16 +12,22 @@
 # MAGIC 3. Make schema changes on the branch without affecting production
 # MAGIC 4. Inspect the branch and clean up
 # MAGIC
-# MAGIC **Run `00_Setup_Lakebase_Project` first.**
+# MAGIC **Run `00_Setup_Lakebase_Project` first.** Connections use your schema via `search_path`; SQL below uses unqualified names.
+# MAGIC
+# MAGIC **Docs:** [Branches](https://docs.databricks.com/aws/en/oltp/projects/branches) |
+# MAGIC [Manage branches](https://docs.databricks.com/aws/en/oltp/projects/manage-branches)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -98,9 +104,9 @@ print("✓ Connected to dev branch")
 
 with conn.cursor() as cur:
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS demo.reviews (
+        CREATE TABLE IF NOT EXISTS reviews (
             review_id SERIAL PRIMARY KEY,
-            product_id INTEGER REFERENCES demo.products(product_id),
+            product_id INTEGER REFERENCES products(product_id),
             rating INTEGER CHECK (rating BETWEEN 1 AND 5),
             comment TEXT,
             reviewer VARCHAR(100),
@@ -108,14 +114,14 @@ with conn.cursor() as cur:
         )
     """)
     cur.execute("""
-        INSERT INTO demo.reviews (product_id, rating, comment, reviewer)
+        INSERT INTO reviews (product_id, rating, comment, reviewer)
         SELECT * FROM (VALUES
             (1, 5, 'Great sound quality!', 'alice'),
             (1, 4, 'Good ANC, comfortable fit', 'bob'),
             (2, 5, 'Best keyboard I have ever used', 'charlie'),
             (3, 4, 'Clear explanations, useful recipes', 'diana')
         ) AS seed(product_id, rating, comment, reviewer)
-        WHERE NOT EXISTS (SELECT 1 FROM demo.reviews LIMIT 1)
+        WHERE NOT EXISTS (SELECT 1 FROM reviews LIMIT 1)
     """)
 conn.commit()
 print("✓ Reviews table created and seeded on dev branch")
@@ -131,13 +137,13 @@ print("✓ Reviews table created and seeded on dev branch")
 from psycopg.rows import dict_row
 
 with conn.cursor(row_factory=dict_row) as cur:
-    cur.execute("SELECT count(*) as cnt FROM demo.reviews")
+    cur.execute("SELECT count(*) as cnt FROM reviews")
     print(f"Dev branch — reviews count: {cur.fetchone()['cnt']}")
 
 prod_conn = get_connection("production")
 with prod_conn.cursor() as cur:
     try:
-        cur.execute("SELECT 1 FROM demo.reviews LIMIT 1")
+        cur.execute("SELECT 1 FROM reviews LIMIT 1")
         print("Production — reviews table exists (unexpected)")
     except Exception:
         print("Production — reviews table does NOT exist (expected!)")
@@ -168,11 +174,11 @@ print("\n✓ Branch isolation confirmed — changes on dev do not affect product
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **Online Feature Store** | `labs/data-integration/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

@@ -6,6 +6,7 @@
 
 # COMMAND ----------
 
+import os
 import re
 import psycopg
 from psycopg.rows import dict_row
@@ -19,9 +20,13 @@ def _sanitize(email):
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9-]", "-", name.lower())).strip("-")
 
 PROJECT_ID = f"lakebase-lab-{_sanitize(user_email)}"
+PG_SCHEMA  = f"lakebase_lab_{_sanitize(user_email).replace('-', '_')}"
+
+_REQUIRED_TABLES = {"products", "events", "agent_sessions", "agent_messages", "agent_memory_store", "audit_log"}
 
 def get_connection(branch="production"):
-    """Connect to a Lakebase branch. Returns a psycopg connection with dict_row."""
+    """Connect to a Lakebase branch. Returns a psycopg connection with dict_row.
+    Sets search_path to PG_SCHEMA so table references don't need schema qualifiers."""
     endpoints = list(w.postgres.list_endpoints(
         parent=f"projects/{PROJECT_ID}/branches/{branch}"
     ))
@@ -29,12 +34,137 @@ def get_connection(branch="production"):
     host = ep.status.hosts.host
     cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
     params = {"host": host, "dbname": "databricks_postgres",
-              "user": user_email, "password": cred.token, "sslmode": "require"}
-    return psycopg.connect(**params, row_factory=dict_row)
+              "user": user_email, "password": cred.token, "sslmode": "require",
+              "options": f"-c search_path={PG_SCHEMA},public"}
+    conn = psycopg.connect(**params, row_factory=dict_row)
+    _ensure_schema(conn, branch)
+    return conn
+
+def _find_seed_sql():
+    """Locate bootstrap/seed.sql by walking up from this file or the calling notebook."""
+    candidates = []
+    try:
+        nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+        ws = f"/Workspace{nb_path}"
+        # Calling notebook is labs/<lab>/<Notebook> — walk up 3 levels to project root
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(ws))), "bootstrap", "seed.sql"))
+        # _setup.py is labs/_setup — walk up 2 levels
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(ws)), "bootstrap", "seed.sql"))
+    except Exception:
+        pass
+    try:
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bootstrap", "seed.sql"))
+    except NameError:
+        pass
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+_REPAIR_SQL = """
+CREATE SCHEMA IF NOT EXISTS {schema};
+
+CREATE TABLE IF NOT EXISTS {schema}.products (
+    product_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    stock_quantity INTEGER DEFAULT 0 CHECK (stock_quantity >= 0),
+    category VARCHAR(100),
+    tags TEXT[],
+    metadata JSONB DEFAULT '{{}}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.events (
+    event_id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    source VARCHAR(100),
+    payload JSONB DEFAULT '{{}}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_sessions (
+    session_id VARCHAR(64) PRIMARY KEY,
+    agent_name VARCHAR(100) NOT NULL,
+    metadata JSONB DEFAULT '{{}}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_messages (
+    message_id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL REFERENCES {schema}.agent_sessions(session_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{{}}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_memory_store (
+    memory_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    topic VARCHAR(255) NOT NULL,
+    memory TEXT NOT NULL,
+    metadata JSONB DEFAULT '{{}}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, topic)
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.audit_log (
+    audit_id SERIAL PRIMARY KEY,
+    table_name VARCHAR(100) NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    record_id INTEGER,
+    old_data JSONB,
+    new_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(100) DEFAULT CURRENT_USER
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_type ON {schema}.events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created ON {schema}.events(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON {schema}.agent_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_memory_user ON {schema}.agent_memory_store(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON {schema}.products(category);
+CREATE INDEX IF NOT EXISTS idx_products_tags ON {schema}.products USING GIN(tags);
+CREATE INDEX IF NOT EXISTS idx_audit_table ON {schema}.audit_log(table_name);
+"""
+
+def _ensure_schema(conn, branch):
+    """Verify required tables exist; create any missing ones."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
+            (PG_SCHEMA,),
+        )
+        existing = {r["table_name"] for r in cur.fetchall()}
+
+    missing = _REQUIRED_TABLES - existing
+    if not missing:
+        return
+
+    print(f"⚠ Missing tables in {PG_SCHEMA}: {missing}")
+    print(f"  Creating missing tables...")
+
+    seed_path = _find_seed_sql()
+    if seed_path:
+        with open(seed_path) as f:
+            sql = f.read().replace("{schema}", PG_SCHEMA)
+    else:
+        sql = _REPAIR_SQL.format(schema=PG_SCHEMA)
+
+    with conn.cursor() as cur:
+        cur.execute(sql)
+    conn.commit()
+    print(f"✓ Schema {PG_SCHEMA} repaired — all tables now exist")
 
 def get_endpoint_name(branch="production"):
     """Get the full endpoint resource name for a branch."""
     return f"projects/{PROJECT_ID}/branches/{branch}/endpoints/primary"
 
 print(f"Project: {PROJECT_ID}")
+print(f"Schema:  {PG_SCHEMA}")
 print(f"User:    {user_email}")

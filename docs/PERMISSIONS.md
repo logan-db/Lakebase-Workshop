@@ -44,16 +44,18 @@ SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');
 -- Replace <SP_CLIENT_ID> with the actual Service Principal client ID
 
 -- Grant schema access
-GRANT ALL ON SCHEMA demo TO "<SP_CLIENT_ID>";
+-- Replace <your_schema> with the PG_SCHEMA from notebook 00 output
+-- (format: lakebase_lab_<your_username>)
+GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 
 -- Grant access to all current tables and sequences
-GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
-GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "<SP_CLIENT_ID>";
+GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 
 -- Grant access to future tables (recommended)
-ALTER DEFAULT PRIVILEGES IN SCHEMA demo
+ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
     GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
-ALTER DEFAULT PRIVILEGES IN SCHEMA demo
+ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
     GRANT ALL ON SEQUENCES TO "<SP_CLIENT_ID>";
 ```
 
@@ -78,10 +80,10 @@ conn = get_connection()
 with conn.cursor() as cur:
     cur.execute("CREATE EXTENSION IF NOT EXISTS databricks_auth")
     cur.execute("SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal')")
-    cur.execute('GRANT ALL ON SCHEMA demo TO "<SP_CLIENT_ID>"')
-    cur.execute('GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>"')
-    cur.execute('GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "<SP_CLIENT_ID>"')
-    cur.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA demo GRANT ALL ON TABLES TO "<SP_CLIENT_ID>"')
+    cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
+    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "<SP_CLIENT_ID>"')
 conn.commit()
 ```
 
@@ -93,7 +95,7 @@ Synced tables (Reverse ETL) are created by the Lakebase sync pipeline, which use
 - After a sync completes, you must **re-grant** access to the SP:
 
 ```sql
-GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
+GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 ```
 
 ## Control Plane Permissions (Branch/Endpoint Management)

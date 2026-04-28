@@ -16,7 +16,9 @@ env:
   - name: LAKEBASE_BRANCH_ID
     value: "production"
   - name: LAKEBASE_SCHEMA
-    value: "demo"
+    # >>> Set this to YOUR schema from notebook 00 output <<<
+    # Format: lakebase_lab_<your_username>  (e.g. lakebase_lab_jane_doe)
+    value: "lakebase_lab_logan_rupert"
 
 resources:
   - name: lakebase-db

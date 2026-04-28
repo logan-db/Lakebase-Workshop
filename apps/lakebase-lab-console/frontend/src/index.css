@@ -1225,6 +1225,10 @@ body {
   margin-bottom: 20px;
 }
 
+.flow-diagram.flow-5 {
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+}
+
 .flow-box {
   padding: 20px;
   background: var(--bg-secondary);

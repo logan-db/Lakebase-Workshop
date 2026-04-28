@@ -44,7 +44,7 @@ export default function SyncStatus({ config }) {
             <div style={{ marginBottom: 8 }}><Database size={28} style={{ color: 'var(--accent)' }} /></div>
             <div className="flow-box-title">PostgreSQL Table</div>
             <div className="flow-box-subtitle">Lakebase</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>demo.user_profiles_synced</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>user_profiles_synced</div>
           </div>
         </div>
 
@@ -136,14 +136,23 @@ w.database.create_synced_database_table(
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <a
-            href={config?.project_id ? `#` : '#'}
+            href={config?.workspace_host && config?.project_id
+              ? `${config.workspace_host}/lakebase/projects/${config.project_id}${config.branch_id ? `?branchId=${config.branch_id}` : ''}`
+              : undefined}
             className="btn btn-secondary"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
+            onClick={(e) => { if (!config?.workspace_host || !config?.project_id) e.preventDefault() }}
           >
             <ExternalLink size={14} /> Open Lakebase UI
           </a>
-          <a href="#" className="btn btn-secondary" target="_blank" rel="noopener">
+          <a
+            href={config?.workspace_host ? `${config.workspace_host}/explore/data` : undefined}
+            className="btn btn-secondary"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => { if (!config?.workspace_host) e.preventDefault() }}
+          >
             <ExternalLink size={14} /> Open Catalog Explorer
           </a>
           <button className="btn btn-secondary" onClick={checkSync} disabled={checking}>

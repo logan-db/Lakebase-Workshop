@@ -70,6 +70,7 @@ def _build_conninfo(branch_id: str | None = None) -> str:
     pguser = os.getenv("PGUSER")
     pgdatabase = os.getenv("PGDATABASE", "databricks_postgres")
     project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
+    schema = os.getenv("LAKEBASE_SCHEMA", "public")
 
     if not branch_id:
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
@@ -78,7 +79,8 @@ def _build_conninfo(branch_id: str | None = None) -> str:
         token = _refresh_token()
         return (
             f"host={pghost} dbname={pgdatabase} user={pguser} "
-            f"password={token} sslmode=require"
+            f"password={token} sslmode=require "
+            f"options=-c\\ search_path={schema},public"
         )
     elif project_id:
         w = _get_workspace_client()
@@ -96,7 +98,8 @@ def _build_conninfo(branch_id: str | None = None) -> str:
         username = w.current_user.me().user_name
         return (
             f"host={host} dbname={pgdatabase} user={username} "
-            f"password={cred.token} sslmode=require"
+            f"password={cred.token} sslmode=require "
+            f"options=-c\\ search_path={schema},public"
         )
     else:
         raise RuntimeError(
@@ -114,6 +117,9 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
     if not branch_id:
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
 
+    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    search_path_opt = f"-c search_path={schema},public"
+
     if pghost and pguser:
         token = _refresh_token()
         params = {
@@ -122,6 +128,7 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
             "user": pguser,
             "password": token,
             "sslmode": "require",
+            "options": search_path_opt,
         }
     elif project_id:
         w = _get_workspace_client()
@@ -144,6 +151,7 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
             "user": username,
             "password": cred.token,
             "sslmode": "require",
+            "options": search_path_opt,
         }
     else:
         raise RuntimeError(

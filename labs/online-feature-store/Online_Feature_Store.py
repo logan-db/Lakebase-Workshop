@@ -26,11 +26,14 @@
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "databricks-feature-engineering>=0.13.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../../_setup
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# MAGIC %run ../_setup
 
 # COMMAND ----------
 
@@ -109,14 +112,16 @@ data = [
 
 features_df = spark.createDataFrame(data, schema=schema)
 
-fe.create_table(
-    name=FEATURE_TABLE,
-    primary_keys=["customer_id"],
-    df=features_df,
-    description="Customer features for real-time personalization and fraud detection",
-)
-
-print(f"✓ Feature table created: {FEATURE_TABLE}")
+if spark.catalog.tableExists(FEATURE_TABLE):
+    print(f"Feature table already exists: {FEATURE_TABLE}")
+else:
+    fe.create_table(
+        name=FEATURE_TABLE,
+        primary_keys=["customer_id"],
+        df=features_df,
+        description="Customer features for real-time personalization and fraud detection",
+    )
+    print(f"✓ Feature table created: {FEATURE_TABLE}")
 
 # COMMAND ----------
 
@@ -147,25 +152,39 @@ display(spark.sql(f"SELECT * FROM {FEATURE_TABLE} ORDER BY customer_id"))
 
 # COMMAND ----------
 
-fe.create_online_store(
-    name=ONLINE_STORE_NAME,
-    capacity="CU_1",
-)
-print(f"✓ Online store creation initiated: {ONLINE_STORE_NAME}")
-print("  This provisions a Lakebase Autoscaling instance (takes 2–4 minutes)...")
+try:
+    existing = fe.get_online_store(name=ONLINE_STORE_NAME)
+    print(f"Online store already exists: {ONLINE_STORE_NAME} (state: {existing.state})")
+except Exception:
+    fe.create_online_store(
+        name=ONLINE_STORE_NAME,
+        capacity="CU_1",
+    )
+    print(f"✓ Online store creation initiated: {ONLINE_STORE_NAME}")
+    print("  This provisions a Lakebase Autoscaling instance (takes 2–4 minutes)...")
 
 # COMMAND ----------
 
 import time
 
-print(f"Waiting for online store '{ONLINE_STORE_NAME}' to become available...")
+TIMEOUT_MINUTES = 15
+print(f"Waiting for online store '{ONLINE_STORE_NAME}' to become available (timeout: {TIMEOUT_MINUTES} min)...")
+deadline = time.monotonic() + TIMEOUT_MINUTES * 60
+
 while True:
     store = fe.get_online_store(name=ONLINE_STORE_NAME)
-    print(f"  State: {store.state}")
-    if str(store.state) in ("AVAILABLE", "OnlineStoreState.AVAILABLE"):
+    state_str = str(store.state).upper()
+    print(f"  State: {store.state}  (raw: {state_str})")
+
+    if "AVAILABLE" in state_str or "ACTIVE" in state_str:
         break
-    if str(store.state) in ("FAILED", "DELETED", "OnlineStoreState.FAILED", "OnlineStoreState.DELETED"):
+    if any(s in state_str for s in ("FAILED", "DELETED", "ERROR")):
         raise RuntimeError(f"Online store failed with state: {store.state}")
+    if time.monotonic() > deadline:
+        raise TimeoutError(
+            f"Online store did not become available within {TIMEOUT_MINUTES} minutes. "
+            f"Last state: {store.state}. Check the Lakebase UI."
+        )
     time.sleep(15)
 
 print(f"\n✓ Online store is ready!")
@@ -376,11 +395,11 @@ print("  The TRIGGERED mode incrementally syncs only the new/changed rows.")
 # MAGIC
 # MAGIC | Path | Folder | What You'll Learn |
 # MAGIC |------|--------|-------------------|
-# MAGIC | **Data Operations** | `labs/application-development/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
-# MAGIC | **Reverse ETL** | `labs/data-integration/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
-# MAGIC | **Development Experience** | `labs/platform-administration/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
-# MAGIC | **Observability** | `labs/data-integration/observability/` | pg_stat views, index analysis, connection monitoring |
-# MAGIC | **Authentication** | `labs/platform-administration/authentication/` | OAuth tokens, two-layer permissions, role grants |
-# MAGIC | **Backup & Recovery** | `labs/platform-administration/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
-# MAGIC | **Agentic Memory** | `labs/application-development/agentic-memory/` | Persistent AI agent memory with session/message storage |
-# MAGIC | **App Deployment** | `labs/application-development/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB queries, array operators, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase for low-latency serving |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling compute, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, connection monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
