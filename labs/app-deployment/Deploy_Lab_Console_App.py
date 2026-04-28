@@ -10,6 +10,9 @@
 # MAGIC an interactive React + FastAPI application that ties together every feature
 # MAGIC from the workshop labs into a single UI.
 # MAGIC
+# MAGIC **Docs:** [Connect an application](https://docs.databricks.com/aws/en/oltp/projects/connect-application) |
+# MAGIC [Databricks Apps tutorial](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling)
+# MAGIC
 # MAGIC **What the Lab Console includes:**
 # MAGIC - Branch Manager — create/delete branches from the UI
 # MAGIC - Autoscaling Dashboard — resize compute and monitor CU ranges
@@ -25,7 +28,7 @@
 # MAGIC ## Prerequisites
 # MAGIC
 # MAGIC 1. **`setup.sh` was run** — this deploys all notebooks, labs, and the Lab Console app via a Databricks Asset Bundle
-# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists and the demo schema is seeded
+# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists and your user schema is seeded
 # MAGIC 3. **Lakebase database added as app resource** — after notebook 00, add the postgres resource to the app
 # MAGIC    (Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database)
 
@@ -54,19 +57,28 @@
 # MAGIC
 # MAGIC ```yaml
 # MAGIC command:
+# MAGIC   - python
+# MAGIC   - -m
 # MAGIC   - uvicorn
 # MAGIC   - app:app
-# MAGIC   - --workers
-# MAGIC   - "4"
+# MAGIC   - --host
+# MAGIC   - 0.0.0.0
+# MAGIC   - --port
+# MAGIC   - "8000"
 # MAGIC env:
 # MAGIC   - name: LAKEBASE_PROJECT_ID
-# MAGIC     value: <set-after-setup>
-# MAGIC   - name: DATABRICKS_HOST
-# MAGIC     value: <set-after-setup>
+# MAGIC     value: <your-project-id>
+# MAGIC   - name: LAKEBASE_BRANCH_ID
+# MAGIC     value: production
+# MAGIC   - name: LAKEBASE_SCHEMA
+# MAGIC     value: <your-schema>   # same as PG_SCHEMA from notebook 00 (e.g. lakebase_lab_<username>)
 # MAGIC resources:
 # MAGIC   - name: lakebase-db
 # MAGIC     type: postgres
 # MAGIC ```
+# MAGIC
+# MAGIC After running notebook `00`, update `LAKEBASE_PROJECT_ID` and `LAKEBASE_SCHEMA` in `app.yaml` with
+# MAGIC your project ID and schema (same values as `PROJECT_ID` / `PG_SCHEMA` printed in the setup notebook).
 
 # COMMAND ----------
 
@@ -103,10 +115,10 @@
 # MAGIC ### Step 2: Grant schema and object access
 # MAGIC
 # MAGIC ```sql
-# MAGIC GRANT ALL ON SCHEMA demo TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA demo TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "<SP_CLIENT_ID>";
-# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA demo
+# MAGIC GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
 # MAGIC   GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
 # MAGIC ```
 # MAGIC
@@ -123,7 +135,10 @@
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -157,15 +172,20 @@ conn = get_connection()
 
 with conn.cursor() as cur:
     cur.execute("CREATE EXTENSION IF NOT EXISTS databricks_auth")
-    cur.execute(f"SELECT databricks_create_role('{SP_CLIENT_ID}', 'service_principal')")
-    cur.execute(f'GRANT ALL ON SCHEMA demo TO "{SP_CLIENT_ID}"')
-    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA demo TO "{SP_CLIENT_ID}"')
-    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA demo TO "{SP_CLIENT_ID}"')
-    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA demo GRANT ALL ON TABLES TO "{SP_CLIENT_ID}"')
+    cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (SP_CLIENT_ID,))
+    if cur.fetchone():
+        print(f"OAuth role already exists for SP: {SP_CLIENT_ID}")
+    else:
+        cur.execute(f"SELECT databricks_create_role('{SP_CLIENT_ID}', 'service_principal')")
+        print(f"✓ Created OAuth role for SP: {SP_CLIENT_ID}")
+    cur.execute(f'GRANT ALL ON SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
+    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{PG_SCHEMA}" GRANT ALL ON TABLES TO "{SP_CLIENT_ID}"')
 conn.commit()
 conn.close()
 
-print(f"✓ Created OAuth role and granted schema permissions on demo to SP: {SP_CLIENT_ID}")
+print(f"✓ Granted schema permissions on {PG_SCHEMA} to SP: {SP_CLIENT_ID}")
 
 # COMMAND ----------
 
@@ -187,21 +207,19 @@ print(f"✓ Created OAuth role and granted schema permissions on demo to SP: {SP
 # MAGIC ---
 # MAGIC ## Workshop Complete!
 # MAGIC
-# MAGIC You have explored every core Lakebase Autoscaling feature:
+# MAGIC You've deployed a full-stack app backed by Lakebase. Here's a summary of every lab path in the workshop:
 # MAGIC
-# MAGIC | Notebook | Feature |
-# MAGIC |----------|---------|
-# MAGIC | **00** | Lakebase architecture, project setup & schema seeding |
-# MAGIC | **01** | Copy-on-write branching |
-# MAGIC | **02** | Authentication, OAuth tokens & permissions |
-# MAGIC | **03** | Autoscaling compute & scale-to-zero |
-# MAGIC | **04** | CRUD, JSONB, arrays, audit triggers, transactions |
-# MAGIC | **05** | Database observability & monitoring |
-# MAGIC | **06** | Reverse ETL with synced tables |
-# MAGIC | **07** | Backup & point-in-time recovery |
-# MAGIC | **08** | Agent memory (sessions + messages) |
-# MAGIC | **09** | Full-stack app deployment |
+# MAGIC | Path | Lab Folder | Feature |
+# MAGIC |------|-----------|---------|
+# MAGIC | **Foundation** | `notebooks/` | Project setup, architecture, schema seeding |
+# MAGIC | **Data Operations** | `labs/data-operations/` | CRUD, JSONB, arrays, audit triggers, transactions |
+# MAGIC | **Reverse ETL** | `labs/reverse-etl/` | Sync Delta Lake tables into Lakebase |
+# MAGIC | **Development Experience** | `labs/development-experience/` | Git-like branching, autoscaling, scale-to-zero |
+# MAGIC | **Observability** | `labs/observability/` | pg_stat views, index analysis, monitoring |
+# MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, roles, two-layer permissions |
+# MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | PITR, branch snapshots, instant restore |
+# MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with sessions |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving |
+# MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app (this lab) |
 # MAGIC
-# MAGIC Check out the `labs/` folder for additional exercises:
-# MAGIC - `labs/advanced-sql/` — advanced PostgreSQL SQL patterns
-# MAGIC - `labs/reverse-etl/` — standalone synced table lab
+# MAGIC Explore any paths you haven't tried yet — each one is independent and self-contained.

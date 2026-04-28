@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { Cpu, Edit3, Check, X, AlertCircle, Server, Zap, RefreshCw } from '../icons'
 
 export default function ComputePage() {
   const [branches, setBranches] = useState([])
@@ -14,14 +15,16 @@ export default function ComputePage() {
     api.listBranches().then(setBranches).catch(() => {})
   }, [])
 
-  useEffect(() => {
+  const loadEndpoints = () => {
     if (!selectedBranch) return
     setLoading(true)
     api.listEndpoints(selectedBranch)
       .then(setEndpoints)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [selectedBranch])
+  }
+
+  useEffect(loadEndpoints, [selectedBranch])
 
   const handleUpdate = async (e) => {
     e.preventDefault()
@@ -34,12 +37,14 @@ export default function ComputePage() {
         max_cu: editForm.max_cu,
       })
       setEditForm(null)
-      api.listEndpoints(selectedBranch).then(setEndpoints)
+      loadEndpoints()
     } catch (err) {
       setError(err.message)
     }
     setUpdating(false)
   }
+
+  const spread = editForm ? editForm.max_cu - editForm.min_cu : 0
 
   return (
     <div>
@@ -52,49 +57,59 @@ export default function ComputePage() {
       </div>
 
       {error && (
-        <div className="card" style={{ borderColor: 'var(--danger)' }}>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>Dismiss</button>
+        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
+            <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
       <div className="card">
         <div className="card-header">
-          <h3>Compute Endpoints</h3>
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            style={{ padding: '6px 12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13 }}
-          >
-            {branches.map((b) => (
-              <option key={b.branch_id} value={b.branch_id}>{b.branch_id}</option>
-            ))}
-          </select>
+          <h3><Server size={16} /> Compute Endpoints</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              style={{ padding: '6px 12px', background: 'var(--bg-inset)', border: '1px solid var(--border-light)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font)' }}
+            >
+              {branches.map((b) => (
+                <option key={b.branch_id} value={b.branch_id}>{b.branch_id}</option>
+              ))}
+            </select>
+            <button className="btn btn-secondary btn-sm btn-icon" onClick={loadEndpoints}>
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
 
         {loading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>Loading endpoints...</p>
+          <div className="empty-state" style={{ padding: 20 }}><p>Loading endpoints...</p></div>
         ) : endpoints.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">⚡</div>
+            <div className="empty-icon"><Cpu size={36} /></div>
             <p>No endpoints found for this branch.</p>
           </div>
         ) : (
           endpoints.map((ep) => (
-            <div key={ep.name} style={{ padding: 16, background: 'var(--bg-primary)', borderRadius: 'var(--radius)', marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{ep.name.split('/').pop()}</span>
-                  <span className={`badge ${ep.state?.includes('ACTIVE') ? 'badge-success' : 'badge-warning'}`} style={{ marginLeft: 8 }}>
+            <div key={ep.name} style={{ padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', marginBottom: 12, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{ep.name.split('/').pop()}</span>
+                  <span className={`badge ${ep.state?.includes('ACTIVE') ? 'badge-success' : 'badge-warning'}`}>
                     {ep.state || 'unknown'}
                   </span>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => setEditForm({ ...ep })}>
-                  Edit Scaling
+                  <Edit3 size={14} /> Edit Scaling
                 </button>
               </div>
 
-              <div className="metrics-row">
+              <div className="metrics-row" style={{ marginBottom: 12 }}>
                 <div className="metric-card">
                   <div className="metric-value">{ep.min_cu ?? '--'}</div>
                   <div className="metric-label">Min CU</div>
@@ -113,8 +128,21 @@ export default function ComputePage() {
                 </div>
               </div>
 
+              {ep.min_cu != null && (
+                <div>
+                  <div className="cu-gauge">
+                    <div className="cu-gauge-fill" style={{ width: `${((ep.max_cu || 0) / 32) * 100}%` }} />
+                  </div>
+                  <div className="cu-gauge-labels">
+                    <span>0 CU</span>
+                    <span>{ep.min_cu}-{ep.max_cu} CU</span>
+                    <span>32 CU</span>
+                  </div>
+                </div>
+              )}
+
               {ep.host && (
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 10 }}>
                   Host: {ep.host}
                 </div>
               )}
@@ -124,44 +152,74 @@ export default function ComputePage() {
       </div>
 
       {editForm && (
-        <div className="card">
-          <h3 style={{ marginBottom: 16 }}>Update Autoscaling Limits</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-            Autoscaling range: 0.5-32 CU. The spread (max - min) cannot exceed 8 CU.
+        <div className="card" style={{ borderColor: 'var(--border-accent)' }}>
+          <div className="card-header">
+            <h3><Edit3 size={16} /> Update Autoscaling Limits</h3>
+            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditForm(null)}>
+              <X size={14} />
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+            Autoscaling range: <strong>0.5-32 CU</strong>. The spread (max - min) cannot exceed <strong>8 CU</strong>.
             Each CU provides ~2 GB RAM.
           </p>
           <form onSubmit={handleUpdate}>
             <div className="form-row">
               <div className="form-group">
-                <label>Min CU</label>
+                <label>Min CU ({editForm.min_cu})</label>
                 <input
-                  type="number"
+                  type="range"
                   step="0.5"
-                  min="0.5"
+                  min="0"
                   max="32"
                   value={editForm.min_cu}
                   onChange={(e) => setEditForm({ ...editForm, min_cu: parseFloat(e.target.value) })}
                 />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                  <span>0</span><span>8</span><span>16</span><span>24</span><span>32</span>
+                </div>
               </div>
               <div className="form-group">
-                <label>Max CU</label>
+                <label>Max CU ({editForm.max_cu})</label>
                 <input
-                  type="number"
+                  type="range"
                   step="0.5"
                   min="0.5"
                   max="32"
                   value={editForm.max_cu}
                   onChange={(e) => setEditForm({ ...editForm, max_cu: parseFloat(e.target.value) })}
                 />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                  <span>0.5</span><span>8</span><span>16</span><span>24</span><span>32</span>
+                </div>
               </div>
             </div>
-            {editForm.max_cu - editForm.min_cu > 8 && (
-              <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>
-                Spread is {editForm.max_cu - editForm.min_cu} CU (max allowed: 8 CU)
-              </p>
+
+            {/* Visual preview */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                <span>Preview</span>
+                <span>{editForm.min_cu}-{editForm.max_cu} CU &middot; {(editForm.min_cu * 2).toFixed(0)}-{(editForm.max_cu * 2).toFixed(0)} GB RAM</span>
+              </div>
+              <div className="cu-gauge">
+                <div className="cu-gauge-fill" style={{ width: `${((editForm.max_cu || 0) / 32) * 100}%`, marginLeft: `${((editForm.min_cu || 0) / 32) * 100}%` }} />
+              </div>
+              <div className="cu-gauge-labels">
+                <span>0 CU</span>
+                <span>32 CU</span>
+              </div>
+            </div>
+
+            {spread > 8 && (
+              <div className="info-box danger" style={{ marginBottom: 12 }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>Spread is {spread.toFixed(1)} CU (max allowed: 8 CU)</span>
+              </div>
             )}
+
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" disabled={updating || editForm.max_cu - editForm.min_cu > 8}>
+              <button className="btn btn-primary" disabled={updating || spread > 8}>
+                <Check size={14} />
                 {updating ? 'Updating...' : 'Apply Changes'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setEditForm(null)}>Cancel</button>
@@ -171,17 +229,19 @@ export default function ComputePage() {
       )}
 
       <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Compute Sizing Reference</h3>
+        <div className="card-header">
+          <h3><Zap size={16} /> Compute Sizing Reference</h3>
+        </div>
         <table className="data-table">
           <thead>
             <tr><th>CU</th><th>RAM</th><th>Max Connections</th><th>Use Case</th></tr>
           </thead>
           <tbody>
-            <tr><td>0.5</td><td>~1 GB</td><td>104</td><td>Dev/test, low traffic</td></tr>
-            <tr><td>4</td><td>~8 GB</td><td>839</td><td>Small production apps</td></tr>
-            <tr><td>8</td><td>~16 GB</td><td>1,678</td><td>Medium production</td></tr>
-            <tr><td>16</td><td>~32 GB</td><td>3,357</td><td>High-throughput apps</td></tr>
-            <tr><td>32</td><td>~64 GB</td><td>4,000</td><td>Maximum autoscale</td></tr>
+            <tr><td><span className="badge badge-teal">0.5</span></td><td>~1 GB</td><td>104</td><td>Dev/test, low traffic</td></tr>
+            <tr><td><span className="badge badge-info">4</span></td><td>~8 GB</td><td>839</td><td>Small production apps</td></tr>
+            <tr><td><span className="badge badge-purple">8</span></td><td>~16 GB</td><td>1,678</td><td>Medium production</td></tr>
+            <tr><td><span className="badge badge-warning">16</span></td><td>~32 GB</td><td>3,357</td><td>High-throughput apps</td></tr>
+            <tr><td><span className="badge badge-accent">32</span></td><td>~64 GB</td><td>4,000</td><td>Maximum autoscale</td></tr>
           </tbody>
         </table>
       </div>

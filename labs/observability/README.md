@@ -19,3 +19,9 @@ Monitor your Lakebase database using built-in PostgreSQL statistics views and th
 - **Cache hit ratio** — Measure buffer cache effectiveness
 - **Index analysis** — Identify unused or redundant indexes
 - **Slow query detection** — Find long-running queries via `pg_stat_activity`
+
+## Documentation
+
+- [Monitor](https://docs.databricks.com/aws/en/oltp/projects/monitor)
+- [Monitor with pg_stat_statements](https://docs.databricks.com/aws/en/oltp/projects/pg-stat-statements)
+- [Metrics dashboard](https://docs.databricks.com/aws/en/oltp/projects/metrics)

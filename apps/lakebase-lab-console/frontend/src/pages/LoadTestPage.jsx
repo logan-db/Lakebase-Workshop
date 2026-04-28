@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
+import { Play, Square, Activity, Clock, AlertCircle, Trash2, X } from '../icons'
 
 export default function LoadTestPage() {
-  const [form, setForm] = useState({ concurrency: 5, duration_seconds: 30, write_ratio: 0.3 })
+  const [form, setForm] = useState({ concurrency: 10, duration_seconds: 60, write_ratio: 0.3 })
   const [testId, setTestId] = useState(null)
   const [metrics, setMetrics] = useState(null)
   const [history, setHistory] = useState([])
@@ -54,36 +55,42 @@ export default function LoadTestPage() {
         <h2>Load Test</h2>
         <p>
           Generate synthetic traffic against Lakebase to observe autoscaling behavior.
-          Watch QPS and latency in real time. Open the Lakebase monitoring page in your
-          workspace to see compute scaling.
+          Watch QPS and latency in real time.
         </p>
       </div>
 
       {error && (
-        <div className="card" style={{ borderColor: 'var(--danger)' }}>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>Dismiss</button>
+        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
+            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
       <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Test Configuration</h3>
+        <div className="card-header">
+          <h3>Test Configuration</h3>
+        </div>
         <div className="form-row">
           <div className="form-group">
             <label>Concurrent Workers</label>
             <input
-              type="number" min={1} max={50}
+              type="number" min={1} max={100}
               value={form.concurrency}
-              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || 5 })}
+              onChange={(e) => setForm({ ...form, concurrency: parseInt(e.target.value) || 10 })}
               disabled={metrics?.running}
             />
           </div>
           <div className="form-group">
             <label>Duration (seconds)</label>
             <input
-              type="number" min={5} max={300}
+              type="number" min={5} max={600}
               value={form.duration_seconds}
-              onChange={(e) => setForm({ ...form, duration_seconds: parseInt(e.target.value) || 30 })}
+              onChange={(e) => setForm({ ...form, duration_seconds: parseInt(e.target.value) || 60 })}
               disabled={metrics?.running}
             />
           </div>
@@ -95,19 +102,21 @@ export default function LoadTestPage() {
             value={form.write_ratio}
             onChange={(e) => setForm({ ...form, write_ratio: parseFloat(e.target.value) })}
             disabled={metrics?.running}
-            style={{ background: 'var(--bg-primary)' }}
           />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {!metrics?.running ? (
             <button className="btn btn-primary" onClick={startTest} disabled={starting}>
+              <Play size={14} />
               {starting ? 'Starting...' : 'Start Load Test'}
             </button>
           ) : (
-            <button className="btn btn-danger" onClick={stopTest}>Stop Test</button>
+            <button className="btn btn-danger" onClick={stopTest}>
+              <Square size={14} /> Stop Test
+            </button>
           )}
           <button className="btn btn-secondary" onClick={() => api.clearLoadtestEvents()}>
-            Clear Test Events
+            <Trash2 size={14} /> Clear Test Events
           </button>
         </div>
       </div>
@@ -144,7 +153,9 @@ export default function LoadTestPage() {
           </div>
 
           <div className="card">
-            <h3 style={{ marginBottom: 12 }}>QPS Over Time</h3>
+            <div className="card-header">
+              <h3><Activity size={16} /> QPS Over Time</h3>
+            </div>
             <div className="chart-area">
               {history.length === 0 ? (
                 <div className="empty-state"><p>Waiting for data...</p></div>
@@ -160,7 +171,9 @@ export default function LoadTestPage() {
           </div>
 
           <div className="card">
-            <h3 style={{ marginBottom: 12 }}>P95 Latency Over Time (ms)</h3>
+            <div className="card-header">
+              <h3><Clock size={16} /> P95 Latency Over Time (ms)</h3>
+            </div>
             <div className="chart-area">
               {history.length === 0 ? (
                 <div className="empty-state"><p>Waiting for data...</p></div>

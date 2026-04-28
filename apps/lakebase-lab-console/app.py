@@ -18,6 +18,8 @@ from backend.routes_compute import router as compute_router
 from backend.routes_loadtest import router as loadtest_router
 from backend.routes_data import router as data_router
 from backend.routes_agent import router as agent_router
+from backend.routes_observability import router as observability_router
+from backend.routes_online_tables import router as online_tables_router
 
 app = FastAPI(
     title="Lakebase Lab Console",
@@ -38,6 +40,8 @@ app.include_router(compute_router)
 app.include_router(loadtest_router)
 app.include_router(data_router)
 app.include_router(agent_router)
+app.include_router(observability_router)
+app.include_router(online_tables_router)
 
 STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
 
@@ -56,12 +60,16 @@ def health():
 
 @app.get("/api/config")
 def get_config():
+    host = os.getenv("DATABRICKS_HOST", "")
+    if host and not host.startswith("https://"):
+        host = f"https://{host}"
     return {
         "project_id": os.getenv("LAKEBASE_PROJECT_ID", ""),
         "branch_id": os.getenv("LAKEBASE_BRANCH_ID", "production"),
         "database": os.getenv("PGDATABASE", "databricks_postgres"),
-        "schema": os.getenv("LAKEBASE_SCHEMA", "demo"),
+        "schema": os.getenv("LAKEBASE_SCHEMA", "public"),
         "pghost_set": bool(os.getenv("PGHOST")),
+        "workspace_host": host,
     }
 
 

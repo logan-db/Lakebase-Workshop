@@ -24,6 +24,10 @@ If you don't have a table ready, the lab creates a catalog, schema, and sample d
 - **Change Data Feed (CDF)** — Delta table feature that tracks row-level changes for incremental sync
 - **Service Principal grants** — Required for the sync pipeline to write into Lakebase
 
+## Documentation
+
+- [Serve lakehouse data with synced tables](https://docs.databricks.com/aws/en/oltp/projects/sync-tables)
+
 ## Notes
 
 See `docs/PERMISSIONS.md` for the Service Principal grants needed for synced tables.

@@ -15,12 +15,18 @@
 # MAGIC 6. Learn where to find the Lakebase monitoring dashboard in the workspace
 # MAGIC
 # MAGIC **Run `00_Setup_Lakebase_Project` first.** Running `labs/data-operations/Data_Operations` first
-# MAGIC for more interesting metrics.
+# MAGIC for more interesting metrics. Catalog queries below filter on **your** PostgreSQL schema (`PG_SCHEMA` from `_setup`), not a fixed name.
+# MAGIC
+# MAGIC **Docs:** [Monitor](https://docs.databricks.com/aws/en/oltp/projects/monitor) |
+# MAGIC [Monitor with pg_stat_statements](https://docs.databricks.com/aws/en/oltp/projects/pg-stat-statements)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -92,7 +98,7 @@ with conn.cursor() as cur:
 # COMMAND ----------
 
 with conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             schemaname || '.' || relname AS table_name,
             seq_scan,
@@ -107,7 +113,7 @@ with conn.cursor() as cur:
             last_vacuum,
             last_analyze
         FROM pg_stat_user_tables
-        WHERE schemaname = 'demo'
+        WHERE schemaname = '{PG_SCHEMA}'
         ORDER BY COALESCE(seq_scan, 0) + COALESCE(idx_scan, 0) DESC
     """)
     rows = cur.fetchall()
@@ -137,7 +143,7 @@ with conn.cursor() as cur:
 # COMMAND ----------
 
 with conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             schemaname || '.' || relname AS table_name,
             indexrelname AS index_name,
@@ -146,7 +152,7 @@ with conn.cursor() as cur:
             idx_tup_fetch AS rows_fetched,
             pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
         FROM pg_stat_user_indexes
-        WHERE schemaname = 'demo'
+        WHERE schemaname = '{PG_SCHEMA}'
         ORDER BY idx_scan DESC
     """)
     rows = cur.fetchall()
@@ -166,7 +172,7 @@ with conn.cursor() as cur:
 # COMMAND ----------
 
 with conn.cursor() as cur:
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             schemaname || '.' || tablename AS table_name,
             pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) AS total_size,
@@ -176,7 +182,7 @@ with conn.cursor() as cur:
                 - pg_relation_size(schemaname || '.' || tablename)
             ) AS index_toast_size
         FROM pg_tables
-        WHERE schemaname = 'demo'
+        WHERE schemaname = '{PG_SCHEMA}'
         ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC
     """)
     rows = cur.fetchall()
@@ -334,4 +340,5 @@ conn.close()
 # MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
 # MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
 # MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
 # MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

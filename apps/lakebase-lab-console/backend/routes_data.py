@@ -1,6 +1,7 @@
-"""Data playground routes: CRUD on demo tables."""
+"""Data playground routes: CRUD on workshop tables."""
 
 import json
+import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -38,11 +39,11 @@ def list_products(category: str | None = None, limit: int = 50):
     """List products, optionally filtered by category."""
     if category:
         return execute_query(
-            "SELECT * FROM demo.products WHERE category = %s ORDER BY product_id LIMIT %s",
+            "SELECT * FROM products WHERE category = %s ORDER BY product_id LIMIT %s",
             (category, limit),
         )
     return execute_query(
-        "SELECT * FROM demo.products ORDER BY product_id LIMIT %s", (limit,)
+        "SELECT * FROM products ORDER BY product_id LIMIT %s", (limit,)
     )
 
 
@@ -50,7 +51,7 @@ def list_products(category: str | None = None, limit: int = 50):
 def get_product(product_id: int):
     """Get a single product."""
     rows = execute_query(
-        "SELECT * FROM demo.products WHERE product_id = %s", (product_id,)
+        "SELECT * FROM products WHERE product_id = %s", (product_id,)
     )
     if not rows:
         raise HTTPException(404, "Product not found")
@@ -61,7 +62,7 @@ def get_product(product_id: int):
 def create_product(req: ProductCreate):
     """Insert a new product."""
     return execute_write(
-        "INSERT INTO demo.products (name, description, price, stock_quantity, category, tags) "
+        "INSERT INTO products (name, description, price, stock_quantity, category, tags) "
         "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
         (req.name, req.description, req.price, req.stock_quantity, req.category, req.tags),
     )
@@ -92,7 +93,7 @@ def update_product(product_id: int, req: ProductUpdate):
     values.append(product_id)
 
     return execute_write(
-        f"UPDATE demo.products SET {', '.join(sets)} WHERE product_id = %s RETURNING *",
+        f"UPDATE products SET {', '.join(sets)} WHERE product_id = %s RETURNING *",
         tuple(values),
     )
 
@@ -101,7 +102,7 @@ def update_product(product_id: int, req: ProductUpdate):
 def delete_product(product_id: int):
     """Delete a product."""
     result = execute_write(
-        "DELETE FROM demo.products WHERE product_id = %s", (product_id,)
+        "DELETE FROM products WHERE product_id = %s", (product_id,)
     )
     if result[0].get("rowcount", 0) == 0:
         raise HTTPException(404, "Product not found")
@@ -115,11 +116,11 @@ def list_events(event_type: str | None = None, limit: int = 100):
     """List recent events."""
     if event_type:
         return execute_query(
-            "SELECT * FROM demo.events WHERE event_type = %s ORDER BY created_at DESC LIMIT %s",
+            "SELECT * FROM events WHERE event_type = %s ORDER BY created_at DESC LIMIT %s",
             (event_type, limit),
         )
     return execute_query(
-        "SELECT * FROM demo.events ORDER BY created_at DESC LIMIT %s", (limit,)
+        "SELECT * FROM events ORDER BY created_at DESC LIMIT %s", (limit,)
     )
 
 
@@ -127,7 +128,7 @@ def list_events(event_type: str | None = None, limit: int = 100):
 def create_event(req: EventCreate):
     """Insert a new event."""
     return execute_write(
-        "INSERT INTO demo.events (event_type, source, payload) VALUES (%s, %s, %s) RETURNING *",
+        "INSERT INTO events (event_type, source, payload) VALUES (%s, %s, %s) RETURNING *",
         (req.event_type, req.source, json.dumps(req.payload)),
     )
 
@@ -135,7 +136,7 @@ def create_event(req: EventCreate):
 @router.delete("/events/loadtest")
 def clear_loadtest_events():
     """Delete all events from load tests."""
-    return execute_write("DELETE FROM demo.events WHERE event_type = 'loadtest'")
+    return execute_write("DELETE FROM events WHERE event_type = 'loadtest'")
 
 
 # --- Audit Log ---
@@ -145,11 +146,11 @@ def list_audit_log(table_name: str | None = None, limit: int = 50):
     """View the audit log."""
     if table_name:
         return execute_query(
-            "SELECT * FROM demo.audit_log WHERE table_name = %s ORDER BY created_at DESC LIMIT %s",
+            "SELECT * FROM audit_log WHERE table_name = %s ORDER BY created_at DESC LIMIT %s",
             (table_name, limit),
         )
     return execute_query(
-        "SELECT * FROM demo.audit_log ORDER BY created_at DESC LIMIT %s", (limit,)
+        "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT %s", (limit,)
     )
 
 
@@ -157,13 +158,36 @@ def list_audit_log(table_name: str | None = None, limit: int = 50):
 
 @router.get("/stats")
 def table_stats():
-    """Get row counts for all demo tables."""
+    """Get row counts for all workshop tables."""
     tables = ["products", "events", "agent_sessions", "agent_messages", "audit_log"]
     stats = {}
     for t in tables:
         try:
-            rows = execute_query(f"SELECT count(*) as cnt FROM demo.{t}")
+            rows = execute_query(f"SELECT count(*) as cnt FROM {t}")
             stats[t] = rows[0]["cnt"]
         except Exception:
             stats[t] = -1
     return stats
+
+
+class QueryRequest(BaseModel):
+    sql: str = Field(..., min_length=1, max_length=5000)
+
+
+_BLOCKED_PATTERNS = re.compile(
+    r"\b(DROP\s+TABLE|DROP\s+SCHEMA|DROP\s+DATABASE|TRUNCATE|ALTER\s+SYSTEM|"
+    r"CREATE\s+ROLE|DROP\s+ROLE|GRANT|REVOKE)\b",
+    re.IGNORECASE,
+)
+
+
+@router.post("/query")
+def run_query(req: QueryRequest):
+    """Run a read-only SQL query for the SQL playground."""
+    sql = req.sql.strip().rstrip(";")
+    if _BLOCKED_PATTERNS.search(sql):
+        raise HTTPException(400, "DDL/DCL statements are not allowed in the query playground")
+    try:
+        return execute_query(sql)
+    except Exception as e:
+        raise HTTPException(400, str(e))

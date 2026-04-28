@@ -13,11 +13,18 @@
 # MAGIC 4. Learn about scale-to-zero behavior
 # MAGIC
 # MAGIC **Run `00_Setup_Lakebase_Project` first.**
+# MAGIC
+# MAGIC **Docs:** [Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/autoscaling) |
+# MAGIC [Scale to zero](https://docs.databricks.com/aws/en/oltp/projects/scale-to-zero) |
+# MAGIC [Manage computes](https://docs.databricks.com/aws/en/oltp/projects/manage-computes)
 
 # COMMAND ----------
 
 # MAGIC %pip install "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" --quiet
-# MAGIC dbutils.library.restartPython()
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -130,4 +137,5 @@ for ep_summary in endpoints:
 # MAGIC | **Authentication** | `labs/authentication/` | OAuth tokens, two-layer permissions, role grants |
 # MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
 # MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
+# MAGIC | **Online Feature Store** | `labs/online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
 # MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |

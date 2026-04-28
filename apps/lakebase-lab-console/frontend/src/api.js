@@ -36,21 +36,46 @@ export const api = {
 
   // Data
   listProducts: (cat) => request(`/api/data/products${cat ? `?category=${cat}` : ''}`),
+  getProduct: (id) => request(`/api/data/products/${id}`),
   createProduct: (data) => request('/api/data/products', { method: 'POST', body: JSON.stringify(data) }),
+  updateProduct: (id, data) => request(`/api/data/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (id) => request(`/api/data/products/${id}`, { method: 'DELETE' }),
   listEvents: (type) => request(`/api/data/events${type ? `?event_type=${type}` : ''}`),
   createEvent: (data) => request('/api/data/events', { method: 'POST', body: JSON.stringify(data) }),
   clearLoadtestEvents: () => request('/api/data/events/loadtest', { method: 'DELETE' }),
   listAudit: (table) => request(`/api/data/audit${table ? `?table_name=${table}` : ''}`),
   tableStats: () => request('/api/data/stats'),
+  runQuery: (sql) => request('/api/data/query', { method: 'POST', body: JSON.stringify({ sql }) }),
 
-  // Agent memory
+  // Agent memory — short-term (sessions/messages)
   listSessions: () => request('/api/agent/sessions'),
   createSession: (data) => request('/api/agent/sessions', { method: 'POST', body: JSON.stringify(data) }),
   deleteSession: (id) => request(`/api/agent/sessions/${id}`, { method: 'DELETE' }),
   getMessages: (id) => request(`/api/agent/sessions/${id}/messages`),
   appendMessage: (id, data) =>
     request(`/api/agent/sessions/${id}/messages`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // Agent memory — long-term (memory store)
+  listMemories: (userId) => request(`/api/agent/memories${userId ? `?user_id=${encodeURIComponent(userId)}` : ''}`),
+  upsertMemory: (data) => request('/api/agent/memories', { method: 'POST', body: JSON.stringify(data) }),
+  deleteMemory: (id) => request(`/api/agent/memories/${id}`, { method: 'DELETE' }),
+  listMemoryUsers: () => request('/api/agent/memories/users'),
+
+  // Observability
+  obsDatabaseStats: () => request('/api/observability/database'),
+  obsTableStats: () => request('/api/observability/tables'),
+  obsIndexStats: () => request('/api/observability/indexes'),
+  obsTableSizes: () => request('/api/observability/sizes'),
+  obsConnections: () => request('/api/observability/connections'),
+  obsActivity: () => request('/api/observability/activity'),
+  obsStatements: () => request('/api/observability/statements'),
+
+  // Online Tables / Feature Store / Synced Tables
+  listOnlineStores: () => request('/api/online-tables/stores'),
+  listSyncedTables: () => request('/api/online-tables/synced-tables'),
+  listFeatureSpecs: () => request('/api/online-tables/feature-specs'),
+  triggerSync: (tableId, pipelineId) =>
+    request(`/api/online-tables/synced-tables/${tableId}/trigger?pipeline_id=${encodeURIComponent(pipelineId)}`, { method: 'POST' }),
 
   // Generic (for API tester)
   raw: (method, path, body) =>

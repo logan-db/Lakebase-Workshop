@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Terminal, Play, Clock, AlertCircle, Check } from '../icons'
 
 const PRESETS = [
   { label: 'Health Check', method: 'GET', path: '/api/health' },
@@ -67,11 +68,13 @@ export default function ApiTester() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 12 }}>Presets</h3>
+        <div className="card-header">
+          <h3><Terminal size={16} /> Presets</h3>
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {PRESETS.map((p) => (
             <button key={p.label} className="btn btn-secondary btn-sm" onClick={() => applyPreset(p)}>
-              <span className={`badge ${p.method === 'GET' ? 'badge-success' : 'badge-warning'}`} style={{ marginRight: 4 }}>{p.method}</span>
+              <span className={`badge ${p.method === 'GET' ? 'badge-success' : 'badge-warning'}`}>{p.method}</span>
               {p.label}
             </button>
           ))}
@@ -79,7 +82,9 @@ export default function ApiTester() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Request</h3>
+        <div className="card-header">
+          <h3>Request</h3>
+        </div>
         <div className="form-row">
           <div className="form-group">
             <label>Method</label>
@@ -106,6 +111,7 @@ export default function ApiTester() {
           </div>
         )}
         <button className="btn btn-primary" onClick={send} disabled={loading}>
+          <Play size={14} />
           {loading ? 'Sending...' : 'Send Request'}
         </button>
       </div>
@@ -113,9 +119,14 @@ export default function ApiTester() {
       {response !== null && (
         <div className="card">
           <div className="card-header">
-            <h3>Response</h3>
+            <h3>
+              {error ? <AlertCircle size={16} style={{ color: 'var(--danger)' }} /> : <Check size={16} style={{ color: 'var(--success)' }} />}
+              Response
+            </h3>
             {elapsed !== null && (
-              <span className="badge badge-info">{elapsed}ms</span>
+              <span className="badge badge-info">
+                <Clock size={11} /> {elapsed}ms
+              </span>
             )}
           </div>
           <div className={`api-response ${error ? 'error' : ''}`}>

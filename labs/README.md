@@ -15,7 +15,8 @@ Ordered from foundational to advanced:
 | 5 | [Authentication](authentication/) | `authentication/` | OAuth tokens, two-layer permissions, role grants |
 | 6 | [Backup & Recovery](backup-recovery/) | `backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
 | 7 | [Agentic Memory](agentic-memory/) | `agentic-memory/` | Persistent AI agent memory with session/message storage |
-| 8 | [App Deployment](app-deployment/) | `app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+| 8 | [Online Feature Store](online-feature-store/) | `online-feature-store/` | Real-time ML feature serving powered by Lakebase Autoscaling |
+| 9 | [App Deployment](app-deployment/) | `app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
 
 ## Path Dependencies
 
@@ -31,8 +32,19 @@ Foundation (00_Setup)
     ├── 5. Authentication
     ├── 6. Backup & Recovery
     ├── 7. Agentic Memory
-    └── 8. App Deployment (best after exploring other paths)
+    ├── 8. Online Feature Store (requires DBR 16.4 LTS ML or serverless)
+    └── 9. App Deployment (best after exploring other paths)
 ```
+
+## Tracks by Role
+
+Pick a track based on your role, or mix and match across tracks. Every lab is independent.
+
+| Track | Who It's For | Labs (in recommended order) |
+|-------|-------------|----------------------------|
+| **Application Builders** | App developers, AI engineers | Data Operations → Agentic Memory → App Deployment |
+| **Data & ML Engineers** | Data engineers, ML teams | Reverse ETL → Online Feature Store → Observability |
+| **Platform Architects** | Central IT, infrastructure, security | Development Experience → Authentication → Backup & Recovery |
 
 ## Suggested Combinations
 
@@ -40,6 +52,7 @@ Foundation (00_Setup)
 |------|-------|
 | **Quick overview (30 min)** | Development Experience |
 | **Data-focused (60 min)** | Data Operations → Observability |
-| **App builder (60 min)** | Authentication → Agentic Memory → App Deployment |
+| **App builder (60 min)** | Data Operations → Agentic Memory → App Deployment |
+| **ML serving (45 min)** | Reverse ETL → Online Feature Store |
 | **Platform deep-dive (90 min)** | Development Experience → Backup & Recovery → Observability |
 | **Full workshop (2.5 hours)** | All paths |

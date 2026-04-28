@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import {
+  Zap, GitBranch, Database, TrendingUp, Activity,
+  Server, Bot, RefreshCw, Terminal, BookOpen,
+  ExternalLink, Cpu, Table, Layers
+} from '../icons'
 
 function cleanState(raw) {
   if (!raw) return 'unknown'
@@ -37,12 +42,13 @@ export default function Dashboard({ onNavigate }) {
   return (
     <div>
       <div className="page-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="page-header-row">
           <div>
             <h2>Dashboard</h2>
             <p>Lakebase Autoscaling project overview and health</p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
+            <RefreshCw size={14} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
@@ -69,29 +75,29 @@ export default function Dashboard({ onNavigate }) {
         </div>
         <div className="status-banner-right">
           <span className="badge badge-info">{config?.branch_id || 'production'}</span>
-          <span className="badge badge-success">{config?.schema || 'demo'}</span>
+          <span className="badge badge-teal">{config?.schema || '...'}</span>
         </div>
       </div>
 
       {/* Key Metrics */}
       <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="metric-card">
-          <div className="metric-icon">&#9889;</div>
+          <div className="metric-icon"><Zap size={18} /></div>
           <div className="metric-value">{ep.min_cu ?? '--'}-{ep.max_cu ?? '--'}</div>
           <div className="metric-label">Compute (CU)</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon">&#9875;</div>
+          <div className="metric-icon"><GitBranch size={18} /></div>
           <div className="metric-value">{branches.length}</div>
           <div className="metric-label">Branches</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon">&#128451;</div>
+          <div className="metric-icon"><Table size={18} /></div>
           <div className="metric-value">{Object.keys(stats).length}</div>
           <div className="metric-label">Tables</div>
         </div>
         <div className="metric-card">
-          <div className="metric-icon">&#128200;</div>
+          <div className="metric-icon"><Activity size={18} /></div>
           <div className="metric-value">{totalRows.toLocaleString()}</div>
           <div className="metric-label">Total Rows</div>
         </div>
@@ -101,11 +107,11 @@ export default function Dashboard({ onNavigate }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card">
           <div className="card-header">
-            <h3>Table Overview</h3>
+            <h3><Database size={16} /> Table Overview</h3>
           </div>
           {Object.keys(stats).length === 0 ? (
             <div className="empty-state" style={{ padding: 20 }}>
-              <p style={{ fontSize: 12 }}>{connected ? 'Loading table stats...' : 'Connect to Lakebase to view tables'}</p>
+              <p>{connected ? 'Loading table stats...' : 'Connect to Lakebase to view tables'}</p>
             </div>
           ) : (
             <table className="data-table">
@@ -115,7 +121,7 @@ export default function Dashboard({ onNavigate }) {
               <tbody>
                 {Object.entries(stats).map(([name, count]) => (
                   <tr key={name}>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>demo.{name}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{config?.schema || ''}.{name}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
                       {count >= 0 ? count.toLocaleString() : <span className="badge badge-danger">error</span>}
                     </td>
@@ -128,7 +134,7 @@ export default function Dashboard({ onNavigate }) {
 
         <div className="card">
           <div className="card-header">
-            <h3>Endpoint Details</h3>
+            <h3><Server size={16} /> Endpoint Details</h3>
           </div>
           {ep.name ? (
             <div style={{ fontSize: 13 }}>
@@ -182,42 +188,52 @@ export default function Dashboard({ onNavigate }) {
         </div>
         <div className="quick-actions-grid">
           <button className="quick-action-card" onClick={() => onNavigate('autoscale')}>
-            <div className="qa-icon">&#128200;</div>
+            <div className="qa-icon"><TrendingUp size={20} /></div>
             <div className="qa-title">Autoscale Demo</div>
             <div className="qa-desc">Spike traffic and watch compute scale in real time</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('branches')}>
-            <div className="qa-icon">&#9875;</div>
+            <div className="qa-icon"><GitBranch size={20} /></div>
             <div className="qa-title">Branch Manager</div>
             <div className="qa-desc">Create, review, and delete database branches</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('data')}>
-            <div className="qa-icon">&#128451;</div>
+            <div className="qa-icon"><Database size={20} /></div>
             <div className="qa-title">Data Ops</div>
             <div className="qa-desc">CRUD operations, JSONB queries, audit log</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('agent')}>
-            <div className="qa-icon">&#129302;</div>
+            <div className="qa-icon"><Bot size={20} /></div>
             <div className="qa-title">Agent Memory</div>
             <div className="qa-desc">Persistent AI agent session and message storage</div>
           </button>
+          <button className="quick-action-card" onClick={() => onNavigate('observability')}>
+            <div className="qa-icon"><Activity size={20} /></div>
+            <div className="qa-title">Observability</div>
+            <div className="qa-desc">PostgreSQL diagnostics, pg_stat views, connection pool</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
+            <div className="qa-icon"><RefreshCw size={20} /></div>
+            <div className="qa-title">Reverse ETL</div>
+            <div className="qa-desc">Sync Delta tables to Lakebase and back to Unity Catalog</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('feature-store')}>
+            <div className="qa-icon"><Layers size={20} /></div>
+            <div className="qa-title">Feature Store</div>
+            <div className="qa-desc">ML feature serving with online stores backed by Lakebase</div>
+          </button>
           <button className="quick-action-card" onClick={() => onNavigate('compute')}>
-            <div className="qa-icon">&#9889;</div>
+            <div className="qa-icon"><Cpu size={20} /></div>
             <div className="qa-title">Compute Config</div>
             <div className="qa-desc">Configure compute CU limits and view endpoints</div>
           </button>
-          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
-            <div className="qa-icon">&#128260;</div>
-            <div className="qa-title">Reverse ETL</div>
-            <div className="qa-desc">Sync Delta Lake tables into Lakebase</div>
-          </button>
           <button className="quick-action-card" onClick={() => onNavigate('api')}>
-            <div className="qa-icon">&#128268;</div>
+            <div className="qa-icon"><Terminal size={20} /></div>
             <div className="qa-title">API Tester</div>
             <div className="qa-desc">Execute raw API calls against Lakebase</div>
           </button>
           <a className="quick-action-card" href="https://docs.databricks.com/aws/en/oltp/projects/" target="_blank" rel="noopener noreferrer">
-            <div className="qa-icon">&#128214;</div>
+            <div className="qa-icon"><ExternalLink size={20} /></div>
             <div className="qa-title">Lakebase Docs</div>
             <div className="qa-desc">Official Databricks Lakebase documentation</div>
           </a>

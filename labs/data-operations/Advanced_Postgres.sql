@@ -1,5 +1,7 @@
 -- Lakebase Workshop: Advanced PostgreSQL Features
 -- Run these against your Lakebase endpoint to explore advanced capabilities.
+-- Set search_path to your schema (replace with your actual schema name from notebook 00):
+-- SET search_path TO lakebase_lab_<your_username>, public;
 
 -- ============================================================
 -- 1. JSONB Queries
@@ -7,17 +9,17 @@
 
 -- Query products by metadata fields
 SELECT name, price, metadata->>'brand' as brand
-FROM demo.products
+FROM products
 WHERE metadata @> '{"brand": "SoundMax"}';
 
 -- Update nested JSONB
-UPDATE demo.products
+UPDATE products
 SET metadata = metadata || '{"on_sale": true, "discount_pct": 15}'::jsonb
 WHERE category = 'Electronics';
 
 -- Find all products with a specific JSONB key
 SELECT name, metadata
-FROM demo.products
+FROM products
 WHERE metadata ? 'on_sale';
 
 
@@ -27,16 +29,16 @@ WHERE metadata ? 'on_sale';
 
 -- Find products with a specific tag
 SELECT name, tags
-FROM demo.products
+FROM products
 WHERE 'featured' = ANY(tags);
 
 -- Find products matching multiple tags (overlap)
 SELECT name, tags
-FROM demo.products
+FROM products
 WHERE tags && ARRAY['audio', 'gaming'];
 
 -- Append a tag to a product
-UPDATE demo.products
+UPDATE products
 SET tags = array_append(tags, 'workshop-tested')
 WHERE product_id = 1;
 
@@ -53,7 +55,7 @@ WITH category_stats AS (
         AVG(price) as avg_price,
         SUM(stock_quantity) as total_stock,
         SUM(price * stock_quantity) as potential_revenue
-    FROM demo.products
+    FROM products
     GROUP BY category
 )
 SELECT
@@ -80,7 +82,7 @@ SELECT
     COUNT(*) as count,
     MIN(created_at) as first_at,
     MAX(created_at) as last_at
-FROM demo.audit_log
+FROM audit_log
 GROUP BY table_name, operation
 ORDER BY table_name, operation;
 
@@ -94,7 +96,7 @@ SELECT
     old_data->>'price' as old_price,
     new_data->>'price' as new_price,
     created_at
-FROM demo.audit_log
+FROM audit_log
 WHERE operation = 'UPDATE'
 ORDER BY created_at DESC
 LIMIT 10;
@@ -111,7 +113,7 @@ SELECT
     pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) as total_size,
     pg_size_pretty(pg_relation_size(schemaname || '.' || tablename)) as data_size
 FROM pg_tables
-WHERE schemaname = 'demo'
+WHERE schemaname = current_schema()
 ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC;
 
 -- Index usage
@@ -122,7 +124,7 @@ SELECT
     idx_scan as times_used,
     pg_size_pretty(pg_relation_size(indexrelid)) as index_size
 FROM pg_stat_user_indexes
-WHERE schemaname = 'demo'
+WHERE schemaname = current_schema()
 ORDER BY idx_scan DESC;
 
 -- Connection stats
@@ -145,16 +147,16 @@ WHERE datname = current_database();
 -- Multi-statement transaction
 BEGIN;
 
-INSERT INTO demo.events (event_type, source, payload)
+INSERT INTO events (event_type, source, payload)
 VALUES ('transaction_demo', 'advanced-sql', '{"step": 1}'::jsonb);
 
-INSERT INTO demo.events (event_type, source, payload)
+INSERT INTO events (event_type, source, payload)
 VALUES ('transaction_demo', 'advanced-sql', '{"step": 2}'::jsonb);
 
 -- Both inserts succeed or fail together
 COMMIT;
 
 -- Verify
-SELECT * FROM demo.events
+SELECT * FROM events
 WHERE event_type = 'transaction_demo'
 ORDER BY created_at DESC;
