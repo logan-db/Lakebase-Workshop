@@ -77,6 +77,12 @@ export const api = {
   triggerSync: (tableId, pipelineId) =>
     request(`/api/online-tables/synced-tables/${tableId}/trigger?pipeline_id=${encodeURIComponent(pipelineId)}`, { method: 'POST' }),
 
+  // Auth & Permissions
+  authCredential: () => request('/api/auth/credential'),
+  authRoles: () => request('/api/auth/roles'),
+  authGrants: () => request('/api/auth/grants'),
+  authConnectionInfo: () => request('/api/auth/connection-info'),
+
   // Generic (for API tester)
   raw: (method, path, body) =>
     request(path, { method, body: body ? JSON.stringify(body) : undefined }),

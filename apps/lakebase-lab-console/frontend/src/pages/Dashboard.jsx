@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import {
   Zap, GitBranch, Database, TrendingUp, Activity,
-  Server, Bot, RefreshCw, Terminal, BookOpen,
-  ExternalLink, Cpu, Table, Layers
+  Server, Bot, RefreshCw, Terminal,
+  ExternalLink, Cpu, Table, Layers, Key, Shield
 } from '../icons'
 
 function cleanState(raw) {
@@ -221,6 +221,16 @@ export default function Dashboard({ onNavigate }) {
             <div className="qa-icon"><Layers size={20} /></div>
             <div className="qa-title">Feature Store</div>
             <div className="qa-desc">ML feature serving with online stores backed by Lakebase</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('auth')}>
+            <div className="qa-icon"><Key size={20} /></div>
+            <div className="qa-title">Auth & Permissions</div>
+            <div className="qa-desc">OAuth credentials, JWT tokens, roles, and grants</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('backup')}>
+            <div className="qa-icon"><Shield size={20} /></div>
+            <div className="qa-title">Backup & Recovery</div>
+            <div className="qa-desc">Branch snapshots, PITR, disaster recovery</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('compute')}>
             <div className="qa-icon"><Cpu size={20} /></div>

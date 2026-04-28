@@ -20,6 +20,7 @@ from backend.routes_data import router as data_router
 from backend.routes_agent import router as agent_router
 from backend.routes_observability import router as observability_router
 from backend.routes_online_tables import router as online_tables_router
+from backend.routes_auth import router as auth_router
 
 app = FastAPI(
     title="Lakebase Lab Console",
@@ -42,6 +43,7 @@ app.include_router(data_router)
 app.include_router(agent_router)
 app.include_router(observability_router)
 app.include_router(online_tables_router)
+app.include_router(auth_router)
 
 STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
 
@@ -50,10 +52,12 @@ STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
 def health():
     project_id = os.getenv("LAKEBASE_PROJECT_ID", "NOT SET")
     pghost = os.getenv("PGHOST", "NOT SET")
+    schema = os.getenv("LAKEBASE_SCHEMA", "NOT SET")
     return {
         "status": "ok",
         "project_id": project_id,
         "pghost": pghost,
+        "schema": schema,
         "frontend_built": STATIC_DIR.exists(),
     }
 
