@@ -15,18 +15,18 @@ import SyncStatus from './pages/SyncStatus'
 import ApiTester from './pages/ApiTester'
 import AgentMemory from './pages/AgentMemory'
 import ObservabilityPage from './pages/ObservabilityPage'
-import OnlineTablesPage from './pages/OnlineTablesPage'
+import FeatureStorePage from './pages/FeatureStorePage'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'overview' },
   { id: 'autoscale', label: 'Autoscale Demo', Icon: TrendingUp, section: 'overview' },
   { id: 'data', label: 'Data Ops', Icon: Database, section: 'labs' },
   { id: 'observability', label: 'Observability', Icon: Activity, section: 'labs' },
-  { id: 'online-tables', label: 'Online Tables', Icon: Table, section: 'labs' },
+  { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'labs' },
+  { id: 'feature-store', label: 'Feature Store', Icon: Layers, section: 'labs' },
   { id: 'agent', label: 'Agent Memory', Icon: Bot, section: 'labs' },
   { id: 'branches', label: 'Branches', Icon: GitBranch, section: 'manage' },
   { id: 'compute', label: 'Compute', Icon: Cpu, section: 'manage' },
-  { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'manage' },
   { id: 'api', label: 'API Tester', Icon: Terminal, section: 'tools' },
 ]
 
@@ -73,7 +73,7 @@ export default function App() {
       case 'api': return <ApiTester />
       case 'agent': return <AgentMemory />
       case 'observability': return <ObservabilityPage />
-      case 'online-tables': return <OnlineTablesPage />
+      case 'feature-store': return <FeatureStorePage />
       default: return <Dashboard onNavigate={setActivePage} />
     }
   }

@@ -70,10 +70,12 @@ export const api = {
   obsActivity: () => request('/api/observability/activity'),
   obsStatements: () => request('/api/observability/statements'),
 
-  // Online Tables
+  // Online Tables / Feature Store / Synced Tables
   listOnlineStores: () => request('/api/online-tables/stores'),
   listSyncedTables: () => request('/api/online-tables/synced-tables'),
   listFeatureSpecs: () => request('/api/online-tables/feature-specs'),
+  triggerSync: (tableId, pipelineId) =>
+    request(`/api/online-tables/synced-tables/${tableId}/trigger?pipeline_id=${encodeURIComponent(pipelineId)}`, { method: 'POST' }),
 
   // Generic (for API tester)
   raw: (method, path, body) =>

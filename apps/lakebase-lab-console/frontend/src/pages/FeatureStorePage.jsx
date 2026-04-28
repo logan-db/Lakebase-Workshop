@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
-import { Database, RefreshCw, Table, Server, Activity, AlertCircle, Check, Clock, ChevronRight, Layers } from '../icons'
+import { Database, RefreshCw, Table, Server, Activity, AlertCircle, ChevronRight, Layers } from '../icons'
 
-export default function OnlineTablesPage() {
-  const [tab, setTab] = useState('synced')
+export default function FeatureStorePage() {
+  const [tab, setTab] = useState('stores')
   const [onlineStores, setOnlineStores] = useState([])
-  const [syncedTables, setSyncedTables] = useState([])
   const [featureSpecs, setFeatureSpecs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -14,13 +13,11 @@ export default function OnlineTablesPage() {
     setLoading(true)
     setError(null)
     try {
-      const [stores, synced, features] = await Promise.allSettled([
+      const [stores, features] = await Promise.allSettled([
         api.listOnlineStores(),
-        api.listSyncedTables(),
         api.listFeatureSpecs(),
       ])
       if (stores.status === 'fulfilled') setOnlineStores(stores.value)
-      if (synced.status === 'fulfilled') setSyncedTables(synced.value)
       if (features.status === 'fulfilled') setFeatureSpecs(features.value)
     } catch (e) {
       setError(e.message)
@@ -39,17 +36,15 @@ export default function OnlineTablesPage() {
     return 'badge-info'
   }
 
-  const totalItems = onlineStores.length + syncedTables.length + featureSpecs.length
-
   return (
     <div>
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2>Online Tables & Synced Data</h2>
+            <h2>Feature Store</h2>
             <p>
-              View Lakebase-backed online stores for feature serving, synced tables from
-              Unity Catalog (reverse ETL), and online table specs for real-time feature access.
+              Real-time ML feature serving powered by Lakebase Autoscaling. Online stores provide
+              sub-millisecond feature lookups for recommendation engines, fraud detection, and personalization.
             </p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={loadAll} disabled={loading}>
@@ -67,16 +62,11 @@ export default function OnlineTablesPage() {
         </div>
       )}
 
-      <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         <div className="metric-card">
           <div className="metric-icon"><Server size={18} /></div>
           <div className="metric-value">{onlineStores.length}</div>
           <div className="metric-label">Online Stores</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-icon"><RefreshCw size={18} /></div>
-          <div className="metric-value">{syncedTables.length}</div>
-          <div className="metric-label">Synced Tables</div>
         </div>
         <div className="metric-card">
           <div className="metric-icon"><Table size={18} /></div>
@@ -86,9 +76,6 @@ export default function OnlineTablesPage() {
       </div>
 
       <div className="tab-group">
-        <button className={`tab-btn ${tab === 'synced' ? 'active' : ''}`} onClick={() => setTab('synced')}>
-          Synced Tables ({syncedTables.length})
-        </button>
         <button className={`tab-btn ${tab === 'stores' ? 'active' : ''}`} onClick={() => setTab('stores')}>
           Online Stores ({onlineStores.length})
         </button>
@@ -99,69 +86,6 @@ export default function OnlineTablesPage() {
           How It Works
         </button>
       </div>
-
-      {/* ── Synced Tables ── */}
-      {tab === 'synced' && (
-        <div className="card">
-          <div className="card-header">
-            <h3><RefreshCw size={16} /> Synced Database Tables</h3>
-          </div>
-          {loading ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
-          ) : syncedTables.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon"><RefreshCw size={36} /></div>
-              <p>No synced tables found. Create one using the Reverse ETL lab notebook.</p>
-              <div className="code-block" style={{ marginTop: 16, textAlign: 'left', maxWidth: 600, margin: '16px auto' }}>{`from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.database import (
-    SyncedDatabaseTable, SyncedTableSpec,
-    NewPipelineSpec, SyncedTableSchedulingPolicy,
-)
-
-w = WorkspaceClient()
-w.database.create_synced_database_table(
-    SyncedDatabaseTable(
-        name="<project>.production.products_synced",
-        spec=SyncedTableSpec(
-            source_table_full_name="<catalog>.<schema>.products",
-            primary_key_columns=["product_id"],
-            scheduling_policy=SyncedTableSchedulingPolicy.TRIGGERED,
-        ),
-    )
-)`}</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {syncedTables.map((t, i) => (
-                <div key={i} style={{ padding: 18, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{t.table_id || t.name}</span>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {t.state && <span className={`badge ${stateColor(t.state)}`}>{t.state}</span>}
-                      <span className="badge badge-info">{t.branch_id}</span>
-                    </div>
-                  </div>
-                  {t.source_table && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      <Database size={12} /> Source: <code style={{ color: 'var(--accent)' }}>{t.source_table}</code>
-                    </div>
-                  )}
-                  {t.primary_key_columns && t.primary_key_columns.length > 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      PK: {t.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
-                    </div>
-                  )}
-                  {t.scheduling_policy && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      Schedule: <span className="badge badge-purple" style={{ fontSize: 10 }}>{t.scheduling_policy}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Online Stores ── */}
       {tab === 'stores' && (
@@ -174,17 +98,22 @@ w.database.create_synced_database_table(
           ) : onlineStores.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Server size={36} /></div>
-              <p>No online stores found. Create one via the Online Feature Store lab notebook.</p>
-              <div className="code-block" style={{ marginTop: 16, textAlign: 'left', maxWidth: 600, margin: '16px auto' }}>{`w = WorkspaceClient()
-w.postgres.create_online_store(
-    parent="projects/<project_id>",
-    online_store=OnlineStore(
-        spec=OnlineStoreSpec(
-            source_table_full_name="<catalog>.<schema>.features",
-            primary_key_columns=["id"],
-        )
-    ),
-    online_store_id="my-feature-store"
+              <p>No online stores found. Create one via the Online Feature Store lab notebook at <code style={{ color: 'var(--accent)' }}>labs/online-feature-store/</code>.</p>
+              <div className="code-block" style={{ marginTop: 16, textAlign: 'left', maxWidth: 600, margin: '16px auto' }}>{`from databricks.feature_engineering import FeatureEngineeringClient
+
+fe = FeatureEngineeringClient()
+
+# Provision a Lakebase Autoscaling instance for feature serving
+fe.create_online_store(
+    name="my-feature-store",
+    capacity="CU_1",
+)
+
+# Publish features from an offline table
+fe.publish_table(
+    online_store=fe.get_online_store("my-feature-store"),
+    source_table_name="catalog.schema.customer_features",
+    online_table_name="catalog.schema.customer_features_online",
 )`}</div>
             </div>
           ) : (
@@ -226,7 +155,7 @@ w.postgres.create_online_store(
           ) : featureSpecs.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Table size={36} /></div>
-              <p>No online table feature specs found. These are created via the Feature Engineering client or UC API.</p>
+              <p>No online table feature specs found. These are created via the Feature Engineering client when you publish features to an online store.</p>
             </div>
           ) : (
             <table className="data-table">
@@ -256,46 +185,7 @@ w.postgres.create_online_store(
         <>
           <div className="card">
             <div className="card-header">
-              <h3><Layers size={16} /> Synced Tables (Reverse ETL)</h3>
-            </div>
-            <div className="flow-diagram flow-5">
-              <div className="flow-box">
-                <div style={{ marginBottom: 8 }}><Database size={28} style={{ color: 'var(--blue)' }} /></div>
-                <div className="flow-box-title">Delta Table</div>
-                <div className="flow-box-subtitle">Unity Catalog</div>
-              </div>
-              <div className="flow-arrow"><ChevronRight size={32} /></div>
-              <div className="flow-box">
-                <div style={{ marginBottom: 8 }}><Activity size={28} style={{ color: 'var(--teal)' }} /></div>
-                <div className="flow-box-title">Sync Pipeline</div>
-                <div className="flow-box-subtitle">Lakeflow</div>
-              </div>
-              <div className="flow-arrow"><ChevronRight size={32} /></div>
-              <div className="flow-box">
-                <div style={{ marginBottom: 8 }}><Database size={28} style={{ color: 'var(--accent)' }} /></div>
-                <div className="flow-box-title">PostgreSQL Table</div>
-                <div className="flow-box-subtitle">Lakebase</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-              <div className="info-box info">
-                <span style={{ fontWeight: 600 }}>Snapshot:</span>
-                <span>One-time full table copy. Good for initial data loading.</span>
-              </div>
-              <div className="info-box warning">
-                <span style={{ fontWeight: 600 }}>Triggered:</span>
-                <span>On-demand incremental updates via CDF. Requires <code>delta.enableChangeDataFeed = true</code>.</span>
-              </div>
-              <div className="info-box info">
-                <span style={{ fontWeight: 600 }}>Continuous:</span>
-                <span>Real-time streaming sync with second-level latency.</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <h3><Server size={16} /> Online Feature Stores</h3>
+              <h3><Layers size={16} /> Online Feature Store Architecture</h3>
             </div>
             <div className="flow-diagram flow-5">
               <div className="flow-box">
@@ -321,6 +211,30 @@ w.postgres.create_online_store(
               Data is synced from Delta tables via the <code>publish_table</code> API. Lakebase provides
               the PostgreSQL-compatible serving layer with autoscaling compute.
             </p>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h3>Key Concepts</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="info-box info">
+                <span style={{ fontWeight: 600 }}>Online Store:</span>
+                <span>A dedicated Lakebase Autoscaling instance provisioned for feature serving. Each store has its own compute that scales independently.</span>
+              </div>
+              <div className="info-box info">
+                <span style={{ fontWeight: 600 }}>Feature Spec:</span>
+                <span>A Unity Catalog online table definition that tracks which offline feature table is published to which online store.</span>
+              </div>
+              <div className="info-box warning">
+                <span style={{ fontWeight: 600 }}>Publish Modes:</span>
+                <span><strong>Triggered</strong> (incremental on-demand), <strong>Continuous</strong> (streaming), or <strong>Snapshot</strong> (full copy). Requires Change Data Feed enabled on the source table.</span>
+              </div>
+              <div className="info-box info">
+                <span style={{ fontWeight: 600 }}>Direct Access:</span>
+                <span>Since online stores are Lakebase instances, you can query features directly with any PostgreSQL client for debugging and validation.</span>
+              </div>
+            </div>
           </div>
         </>
       )}

@@ -212,10 +212,15 @@ export default function Dashboard({ onNavigate }) {
             <div className="qa-title">Observability</div>
             <div className="qa-desc">PostgreSQL diagnostics, pg_stat views, connection pool</div>
           </button>
-          <button className="quick-action-card" onClick={() => onNavigate('online-tables')}>
+          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
+            <div className="qa-icon"><RefreshCw size={20} /></div>
+            <div className="qa-title">Reverse ETL</div>
+            <div className="qa-desc">Sync Delta tables to Lakebase and back to Unity Catalog</div>
+          </button>
+          <button className="quick-action-card" onClick={() => onNavigate('feature-store')}>
             <div className="qa-icon"><Layers size={20} /></div>
-            <div className="qa-title">Online Tables</div>
-            <div className="qa-desc">Feature stores, synced tables, and reverse ETL status</div>
+            <div className="qa-title">Feature Store</div>
+            <div className="qa-desc">ML feature serving with online stores backed by Lakebase</div>
           </button>
           <button className="quick-action-card" onClick={() => onNavigate('compute')}>
             <div className="qa-icon"><Cpu size={20} /></div>

@@ -92,6 +92,21 @@ def list_synced_tables():
         raise HTTPException(500, f"Failed to list synced tables: {e}")
 
 
+@router.post("/synced-tables/{table_id}/trigger")
+def trigger_synced_table(table_id: str, pipeline_id: str | None = None):
+    """Trigger a sync pipeline update for a synced table."""
+    try:
+        w = WorkspaceClient()
+        if not pipeline_id:
+            raise HTTPException(400, "pipeline_id is required to trigger a sync")
+        w.pipelines.start_update(pipeline_id=pipeline_id)
+        return {"message": f"Sync pipeline {pipeline_id} triggered for {table_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to trigger sync: {e}")
+
+
 @router.get("/feature-specs")
 def list_feature_specs():
     """List Unity Catalog online table specs (feature serving) if available."""
