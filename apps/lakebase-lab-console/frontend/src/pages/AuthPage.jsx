@@ -1,6 +1,35 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
-import { Key, Database, RefreshCw, AlertCircle, Shield, Server } from '../icons'
+import { Key, Database, RefreshCw, AlertCircle, Shield, Server, ChevronRight } from '../icons'
+
+function CollapsibleSection({ title, icon, badge, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="card">
+      <div
+        className="card-header"
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ChevronRight
+            size={14}
+            style={{
+              transition: 'transform 0.2s',
+              transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+              flexShrink: 0,
+            }}
+          />
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {icon} {title}
+          </h3>
+        </div>
+        {badge}
+      </div>
+      {open && children}
+    </div>
+  )
+}
 
 export default function AuthPage() {
   const [connInfo, setConnInfo] = useState(null)
@@ -174,10 +203,12 @@ export default function AuthPage() {
 
       {/* JWT Claims */}
       {credential?.jwt_claims && Object.keys(credential.jwt_claims).length > 0 && (
-        <div className="card">
-          <div className="card-header">
-            <h3><Key size={16} /> JWT Payload</h3>
-          </div>
+        <CollapsibleSection
+          title="JWT Payload"
+          icon={<Key size={16} />}
+          badge={<span className="badge badge-info">{Object.keys(credential.jwt_claims).length} claims</span>}
+          defaultOpen={false}
+        >
           <table className="data-table">
             <thead>
               <tr><th>Claim</th><th>Value</th></tr>
@@ -201,15 +232,16 @@ export default function AuthPage() {
               <span>Token expiration (~1 hour from issue). Open connections remain active past expiry; only new logins are rejected.</span>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Roles */}
-      <div className="card">
-        <div className="card-header">
-          <h3><Database size={16} /> Database Roles</h3>
-          <span className="badge badge-info">{roles.length} roles</span>
-        </div>
+      <CollapsibleSection
+        title="Database Roles"
+        icon={<Database size={16} />}
+        badge={<span className="badge badge-info">{roles.length} roles</span>}
+        defaultOpen={false}
+      >
         {roles.length === 0 ? (
           <div className="empty-state" style={{ padding: 20 }}>
             <p>{loading ? 'Loading roles...' : 'No roles found or not connected'}</p>
@@ -232,14 +264,15 @@ export default function AuthPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* Grants */}
-      <div className="card">
-        <div className="card-header">
-          <h3><Shield size={16} /> Schema Grants</h3>
-          <span className="badge badge-info">{grants.length} grants</span>
-        </div>
+      <CollapsibleSection
+        title="Schema Grants"
+        icon={<Shield size={16} />}
+        badge={<span className="badge badge-info">{grants.length} grants</span>}
+        defaultOpen={false}
+      >
         {grants.length === 0 ? (
           <div className="empty-state" style={{ padding: 20 }}>
             <p>{loading ? 'Loading grants...' : 'No explicit grants found (you\'re the owner, so you have implicit access)'}</p>
@@ -260,14 +293,11 @@ export default function AuthPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* Grant Examples + External Tools */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div className="card">
-          <div className="card-header">
-            <h3>Grant Examples</h3>
-          </div>
+        <CollapsibleSection title="Grant Examples" icon={null} defaultOpen={false}>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
             Run these via the SQL Playground or psql to grant access:
           </p>
@@ -286,12 +316,9 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA <schema>
 -- Auto-grant for future tables
 ALTER DEFAULT PRIVILEGES IN SCHEMA <schema>
   GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";`}</div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="card">
-          <div className="card-header">
-            <h3>External Tools</h3>
-          </div>
+        <CollapsibleSection title="External Tools" icon={null} defaultOpen={false}>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
             Connect with psql, DBeaver, DataGrip, or any PostgreSQL client:
           </p>
@@ -312,7 +339,7 @@ PGPASSWORD="$TOKEN" psql \\
             <span style={{ fontWeight: 600 }}>Token TTL:</span>
             <span>Tokens expire after 1 hour. Use a password command or connection pool with auto-refresh for long-running sessions.</span>
           </div>
-        </div>
+        </CollapsibleSection>
       </div>
     </div>
   )

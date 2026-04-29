@@ -71,7 +71,7 @@ export const api = {
   obsStatements: () => request('/api/observability/statements'),
 
   // Online Tables / Feature Store / Synced Tables
-  listOnlineStores: () => request('/api/online-tables/stores'),
+  listOnlineStores: (mineOnly = true) => request(`/api/online-tables/stores?mine_only=${mineOnly}`),
   listSyncedTables: () => request('/api/online-tables/synced-tables'),
   listFeatureSpecs: () => request('/api/online-tables/feature-specs'),
   triggerSync: (tableId, pipelineId) =>

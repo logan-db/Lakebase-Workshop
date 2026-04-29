@@ -1,12 +1,12 @@
 # Online Feature Store
 
-Use Lakebase Autoscaling as a high-performance online feature store for real-time ML serving — recommendation systems, fraud detection, and personalization engines.
+Use your existing Lakebase Autoscaling project as a high-performance online feature store for real-time ML serving — recommendation systems, fraud detection, and personalization engines.
 
 ## Labs
 
 | Lab | What You'll Learn |
 |-----|-------------------|
-| `Online_Feature_Store` | Create feature tables, provision an online store, publish features, query via PostgreSQL |
+| `Online_Feature_Store` | Create feature tables, publish features to your existing Lakebase project, query via PostgreSQL |
 
 ## Prerequisites
 
@@ -16,21 +16,27 @@ Use Lakebase Autoscaling as a high-performance online feature store for real-tim
 
 ## Key Concepts
 
-- **Online Feature Store** — A managed Lakebase Autoscaling instance optimized for low-latency feature lookups
-- **Feature table** — A Delta table in Unity Catalog with a primary key and Change Data Feed enabled
-- **Publish modes** — TRIGGERED (on-demand sync), CONTINUOUS (streaming), or SNAPSHOT (full copy)
-- **Feature Serving endpoints** — REST API endpoints that resolve features from online stores automatically
+- **Online Feature Store** — A Lakebase Autoscaling project that serves feature data at low latency. You can reuse an existing project rather than provisioning a dedicated instance ([docs](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)).
+- **Feature table** — A Delta table in Unity Catalog with a primary key and [Change Data Feed](https://docs.databricks.com/aws/en/delta/delta-change-data-feed) enabled
+- **Publish modes** — [TRIGGERED (on-demand sync), CONTINUOUS (streaming), or SNAPSHOT (full copy)](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#publish-modes)
+- **Feature Serving endpoints** — [REST API endpoints](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-function-serving) that resolve features from online stores automatically
 - **Lakebase under the hood** — The online store IS a Lakebase PostgreSQL instance, queryable with standard tools
 
 ## Architecture
 
 ```
+Lakebase Autoscaling Project (lakebase-lab-<you>)
+  └── Branch: production
+        └── Database: databricks_postgres
+              ├── Schema: lakebase_lab_<you>   (workshop tables: products, events, etc.)
+              └── Schema: main__lakebase_*     (feature tables published by FE client)
+
 Offline Feature Table (Delta/UC)
     │
     │  fe.publish_table()
     │  (TRIGGERED / CONTINUOUS / SNAPSHOT)
     ▼
-Online Feature Store (Lakebase Autoscaling)
+Same Lakebase Project (no separate instance)
     │
     ├──→ Feature Serving Endpoint (REST API for real-time apps)
     │
@@ -39,11 +45,14 @@ Online Feature Store (Lakebase Autoscaling)
 
 ## Cost Notes
 
-- Online stores incur costs continuously — delete them when not in use
-- Start with `CU_1` for testing, scale up only when needed
-- Multiple feature tables can share a single online store
+- This lab reuses your existing Lakebase project — no additional instance costs
+- The [docs recommend](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store) sharing a single online store across multiple feature tables
+- Multiple feature tables can be published to the same project
 
 ## Documentation
 
-- [Feature Serving endpoints](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-serving-endpoints)
-- [Online Feature Store (Lakebase)](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)
+- [Databricks Online Feature Stores](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)
+- [Feature Serving endpoints](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-function-serving)
+- [Use features in online workflows](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-workflows)
+- [Feature Engineering in Databricks](https://docs.databricks.com/aws/en/machine-learning/feature-store/)
+- [Lakebase Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/)
