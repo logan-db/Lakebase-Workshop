@@ -198,61 +198,181 @@ USER_EMAIL=$(databricks current-user me --profile "$PROFILE" 2>/dev/null \
 
 WORKSPACE_NOTEBOOK_DIR="/Workspace/Users/${USER_EMAIL}/lakebase-workshop"
 
-# Derive the Lakebase project ID (same logic as notebook 00 and _setup.py)
-PROJECT_ID=$(python3 -c "
+# Derive the Lakebase project ID and app name (same sanitize logic as notebook 00 and _setup.py)
+read -r PROJECT_ID APP_NAME < <(python3 -c "
 import re
 email = '$USER_EMAIL'
 name = email.split('@')[0]
 name = re.sub(r'[^a-z0-9-]', '-', name.lower())
 name = re.sub(r'-+', '-', name).strip('-')
-print(f'lakebase-lab-{name}')
-" 2>/dev/null || echo "<your-project-id>")
+project_id = f'lakebase-lab-{name}'
+app_name = f'lakebase-lab-{name}'
+if len(app_name) > 30:
+    app_name = app_name[:30].rstrip('-')
+print(project_id, app_name)
+" 2>/dev/null || echo "<your-project-id> <your-app-name>")
 
-# Write the project ID into app.yaml
-APP_YAML="$SCRIPT_DIR/apps/lakebase-lab-console/app.yaml"
+# Write the resolved app name into databricks.yml so it always fits the 30-char limit
 python3 -c "
+import re
+path = '$DAB_YAML'
+content = open(path).read()
+# Only replace the app 'name:' line (indented under the app resource), not source_code_path
+content = re.sub(
+    r'(^\s+name:)\s*lakebase-lab-\S+',
+    r'\1 $APP_NAME',
+    content,
+    count=1,
+    flags=re.MULTILINE
+)
+open(path, 'w').write(content)
+" 2>/dev/null || true
+ok "App name: $APP_NAME (${#APP_NAME} chars)"
+
+# Patch app.yaml with the resolved project ID so the app always knows its project
+APP_YAML="$SCRIPT_DIR/apps/lakebase-lab-console/app.yaml"
+if [[ -f "$APP_YAML" ]]; then
+  python3 -c "
+import re
 content = open('$APP_YAML').read()
-content = content.replace('<your-project-id>', '$PROJECT_ID')
+# Replace placeholder or any previous project ID on the LAKEBASE_PROJECT_ID line
+content = re.sub(
+    r'(name:\s*LAKEBASE_PROJECT_ID\s*\n\s*value:\s*\")([^\"]*)(\")',
+    r'\g<1>$PROJECT_ID\3',
+    content
+)
 open('$APP_YAML', 'w').write(content)
 " 2>/dev/null || true
-ok "app.yaml configured with project ID: $PROJECT_ID"
+  ok "app.yaml configured with project: $PROJECT_ID"
+fi
 
 # Write config file for reference
 cat > "$SCRIPT_DIR/.workshop-config" <<EOF
 PROFILE=$PROFILE
 WORKSPACE_HOST=$WORKSPACE_HOST
 PROJECT_ID=$PROJECT_ID
+APP_NAME=$APP_NAME
 EOF
 ok "Config saved to .workshop-config"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Optional: Deploy everything to the workspace
+# 6. Deploy to workspace
 # ─────────────────────────────────────────────────────────────────────────────
 
-step "Deploy to workspace"
-info "This deploys notebooks, labs, and the Lab Console app to your workspace"
-info "using Databricks Asset Bundles."
-echo ""
-ask "Deploy now? (Y/n):"
-read -r DO_DEPLOY
-DO_DEPLOY="${DO_DEPLOY:-Y}"
+DEPLOYED_APP=false
 
-if [[ "$DO_DEPLOY" =~ ^[Yy] ]]; then
-  info "Deploying bundle..."
-  if databricks bundle deploy --target dev --profile "$PROFILE"; then
-    ok "Deployed to workspace"
-    echo ""
-    info "Find your content at:"
-    info "  /Workspace/Users/${USER_EMAIL}/.bundle/lakebase-workshop/dev/files/"
-    echo ""
-    info "After running notebook 00, add the postgres resource to the app:"
-    info "  Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database"
+step "Deploy to workspace"
+info "What would you like to deploy?"
+echo ""
+echo -e "    ${BOLD}1)${RESET} Labs only      — notebooks and lab files (no app compute)"
+echo -e "    ${BOLD}2)${RESET} Labs + App     — everything, including the Lab Console app"
+echo ""
+ask "Choice (1/2):"
+read -r DEPLOY_CHOICE
+DEPLOY_CHOICE="${DEPLOY_CHOICE:-1}"
+
+if [[ "$DEPLOY_CHOICE" == "2" ]]; then
+  FRONTEND_DIR="$SCRIPT_DIR/apps/lakebase-lab-console/frontend"
+  if [[ -f "$FRONTEND_DIR/package.json" ]]; then
+    if command -v npm &>/dev/null; then
+      info "Building frontend..."
+      (cd "$FRONTEND_DIR" && npm install --silent && npm run build --silent) 2>&1 | tail -3 || true
+      if [[ -f "$FRONTEND_DIR/dist/index.html" ]]; then
+        ok "Frontend built"
+      else
+        warn "Frontend build may have failed — the app will run without a UI"
+      fi
+    else
+      warn "npm not found — skipping frontend build"
+      info "Install Node.js to build the frontend: https://nodejs.org"
+    fi
+  fi
+fi
+
+reattach_lakebase_resource() {
+  # Bundle deploy uses Terraform which clears API-added app resources and
+  # revokes the SP's PostgreSQL grants. Re-attach and re-grant if the project exists.
+  DB_NAME=$(databricks api get "/api/2.0/postgres/projects/${PROJECT_ID}/branches/production/databases" \
+    --profile "$PROFILE" 2>/dev/null \
+    | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+dbs = data.get('databases', data) if isinstance(data, dict) else data
+for db in (dbs if isinstance(dbs, list) else [dbs]):
+    status = db.get('status', {})
+    if status.get('postgres_database') == 'databricks_postgres':
+        print(db['name'])
+        break
+" 2>/dev/null || true)
+
+  if [[ -n "$DB_NAME" ]]; then
+    BRANCH_NAME="projects/${PROJECT_ID}/branches/production"
+    databricks api patch "/api/2.0/apps/${APP_NAME}" --profile "$PROFILE" --json "{
+      \"resources\": [{
+        \"name\": \"lakebase-db\",
+        \"postgres\": {
+          \"branch\": \"${BRANCH_NAME}\",
+          \"database\": \"${DB_NAME}\",
+          \"permission\": \"CAN_CONNECT_AND_CREATE\"
+        }
+      }]
+    }" &>/dev/null && ok "Lakebase database attached to app" \
+                   || info "Database will be attached when you run notebook 00"
+
+    # Re-grant schema access to the app's service principal
+    SP_CLIENT_ID=$(databricks apps get "$APP_NAME" --profile "$PROFILE" -o json 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('service_principal_client_id',''))" 2>/dev/null || true)
+    PG_SCHEMA="${PROJECT_ID//-/_}"
+
+    if [[ -n "$SP_CLIENT_ID" ]] && command -v psql &>/dev/null; then
+      PG_TOKEN=$(databricks postgres generate-database-credential \
+        "projects/${PROJECT_ID}/branches/production/endpoints/primary" \
+        --profile "$PROFILE" -o json 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null || true)
+      PG_HOST=$(databricks api get \
+        "/api/2.0/postgres/projects/${PROJECT_ID}/branches/production/endpoints/primary" \
+        --profile "$PROFILE" 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',{}).get('hosts',{}).get('host',''))" 2>/dev/null || true)
+
+      if [[ -n "$PG_TOKEN" && -n "$PG_HOST" ]]; then
+        PGPASSWORD="$PG_TOKEN" psql "host=$PG_HOST dbname=databricks_postgres user=$USER_EMAIL sslmode=require" -q -c "
+          GRANT USAGE, CREATE ON SCHEMA $PG_SCHEMA TO \"$SP_CLIENT_ID\";
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA $PG_SCHEMA TO \"$SP_CLIENT_ID\";
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA $PG_SCHEMA TO \"$SP_CLIENT_ID\";
+          ALTER DEFAULT PRIVILEGES IN SCHEMA $PG_SCHEMA GRANT ALL ON TABLES TO \"$SP_CLIENT_ID\";
+          ALTER DEFAULT PRIVILEGES IN SCHEMA $PG_SCHEMA GRANT ALL ON SEQUENCES TO \"$SP_CLIENT_ID\";
+        " &>/dev/null && ok "Schema access granted to app service principal" \
+                       || info "Run notebook 00 to grant schema access to the app"
+      fi
+    fi
   else
-    warn "Bundle deploy failed. You can retry manually:"
-    info "  databricks bundle deploy --target dev --profile $PROFILE"
+    info "No Lakebase project yet — run notebook 00 to create it and attach the database"
+  fi
+}
+
+info "Deploying bundle..."
+if databricks bundle deploy --target dev --profile "$PROFILE"; then
+  ok "Deployed to workspace"
+  echo ""
+  info "Find your content at:"
+  info "  /Workspace/Users/${USER_EMAIL}/.bundle/lakebase-workshop/dev/files/"
+
+  # Re-attach Lakebase resource (bundle deploy clears it via Terraform)
+  reattach_lakebase_resource
+
+  if [[ "$DEPLOY_CHOICE" == "2" ]]; then
+    echo ""
+    info "Starting app and deploying source code..."
+    if databricks bundle run lakebase_lab_console --target dev --profile "$PROFILE"; then
+      ok "App deployed and running"
+      DEPLOYED_APP=true
+    else
+      warn "App deploy failed — you can deploy later with:"
+      info "  databricks bundle run lakebase_lab_console --target dev --profile $PROFILE"
+    fi
   fi
 else
-  info "Skipping deployment. You can deploy later with:"
+  warn "Bundle deploy failed. You can retry manually:"
   info "  databricks bundle deploy --target dev --profile $PROFILE"
 fi
 
@@ -268,7 +388,7 @@ echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━�
 echo ""
 echo -e "  ${BOLD}Step 1: Run the foundation${RESET}"
 echo -e "  Open ${BOLD}notebooks/00_Setup_Lakebase_Project${RESET} and click Run All."
-echo -e "  This creates your Lakebase project and seeds the demo schema."
+echo -e "  This creates your Lakebase project and seeds your user schema."
 echo ""
 echo -e "  ${BOLD}Step 2: Pick a lab path${RESET}"
 echo -e "  Each path is independent — choose based on your interest:"
@@ -286,6 +406,12 @@ echo ""
 echo -e "  ${DIM}Workspace:   $WORKSPACE_HOST${RESET}"
 echo -e "  ${DIM}Profile:     $PROFILE${RESET}"
 echo -e "  ${DIM}Project ID:  $PROJECT_ID${RESET}"
+if [[ "$DEPLOYED_APP" == "true" ]]; then
+  echo -e "  ${DIM}App:         $APP_NAME (running)${RESET}"
+else
+  echo -e "  ${DIM}App:         not deployed — deploy later with:${RESET}"
+  echo -e "  ${DIM}             databricks bundle run lakebase_lab_console --target dev --profile $PROFILE${RESET}"
+fi
 echo ""
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""

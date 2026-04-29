@@ -1,29 +1,23 @@
 """Online Tables / Feature Store routes via Databricks SDK + REST API."""
 
 import logging
-import os
 from fastapi import APIRouter, HTTPException, Query
 from databricks.sdk import WorkspaceClient
+
+from .db import get_project_id, get_schema
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/online-tables", tags=["online-tables"])
 
 
-def _get_project_id() -> str:
-    pid = os.getenv("LAKEBASE_PROJECT_ID")
-    if not pid:
-        raise HTTPException(500, "LAKEBASE_PROJECT_ID not configured")
-    return pid
-
-
 def _get_user_identifier() -> str:
-    """Derive a user identifier from LAKEBASE_SCHEMA for filtering.
+    """Derive a user identifier from the schema name for filtering.
 
-    LAKEBASE_SCHEMA is like 'lakebase_lab_logan_rupert' -> 'logan_rupert'
+    Schema like 'lakebase_lab_logan_rupert' -> 'logan_rupert'
     which maps to creator patterns like 'logan.rupert@...'
     """
-    schema = os.getenv("LAKEBASE_SCHEMA", "")
+    schema = get_schema()
     prefix = "lakebase_lab_"
     if schema.startswith(prefix):
         return schema[len(prefix):]
@@ -117,12 +111,9 @@ def list_synced_tables():
     """
     try:
         w = WorkspaceClient()
-        schema = os.getenv("LAKEBASE_SCHEMA", "")
+        schema = get_schema()
         catalog = "main"
         all_synced = []
-
-        if not schema:
-            return []
 
         try:
             uc_tables = list(w.tables.list(catalog_name=catalog, schema_name=schema))
@@ -227,11 +218,8 @@ def list_feature_specs():
     """
     w = WorkspaceClient()
     result = []
-    schema = os.getenv("LAKEBASE_SCHEMA", "")
+    schema = get_schema()
     catalog = "main"
-
-    if not schema:
-        return []
 
     try:
         uc_tables = list(w.tables.list(catalog_name=catalog, schema_name=schema))

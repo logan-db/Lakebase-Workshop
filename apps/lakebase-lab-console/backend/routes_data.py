@@ -1,14 +1,13 @@
 """Data playground routes: CRUD on workshop tables."""
 
 import json
-import os
 import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .db import execute_query, execute_write
+from .db import execute_query, execute_write, get_schema
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/api/data", tags=["data"])
 def seed_tables():
     """Create workshop tables if they don't exist (idempotent)."""
     seed_file = Path(__file__).parent.parent.parent / "bootstrap" / "seed.sql"
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    schema = get_schema()
 
     if seed_file.exists():
         raw = seed_file.read_text()

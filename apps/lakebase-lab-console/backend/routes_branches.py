@@ -1,19 +1,13 @@
 """Branch management API routes."""
 
-import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
 
+from .db import get_project_id
+
 router = APIRouter(prefix="/api/branches", tags=["branches"])
-
-
-def _get_project_id() -> str:
-    pid = os.getenv("LAKEBASE_PROJECT_ID")
-    if not pid:
-        raise HTTPException(500, "LAKEBASE_PROJECT_ID not configured")
-    return pid
 
 
 def _get_client() -> WorkspaceClient:
@@ -41,7 +35,7 @@ class BranchInfo(BaseModel):
 def list_branches():
     """List all branches in the project."""
     w = _get_client()
-    project_id = _get_project_id()
+    project_id = get_project_id()
     branches = list(w.postgres.list_branches(parent=f"projects/{project_id}"))
 
     result = []
@@ -63,7 +57,7 @@ def list_branches():
 def get_branch(branch_id: str):
     """Get details of a specific branch."""
     w = _get_client()
-    project_id = _get_project_id()
+    project_id = get_project_id()
     b = w.postgres.get_branch(name=f"projects/{project_id}/branches/{branch_id}")
     bid = b.name.split("/")[-1]
     return BranchInfo(
@@ -81,7 +75,7 @@ def get_branch(branch_id: str):
 def create_branch(req: CreateBranchRequest):
     """Create a new branch (prefixed with 'lab-')."""
     w = _get_client()
-    project_id = _get_project_id()
+    project_id = get_project_id()
     source = f"projects/{project_id}/branches/{req.source_branch}"
 
     ttl_seconds = req.ttl_hours * 3600
@@ -116,7 +110,7 @@ def delete_branch(branch_id: str):
         raise HTTPException(400, "Only lab- prefixed branches can be deleted from the console")
 
     w = _get_client()
-    project_id = _get_project_id()
+    project_id = get_project_id()
 
     try:
         w.postgres.delete_branch(

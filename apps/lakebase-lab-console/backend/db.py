@@ -5,10 +5,15 @@ Supports two modes:
   1. Databricks App runtime: uses auto-injected PG* env vars + SDK credential generation
   2. Direct SDK mode: discovers endpoint host from project ID
 
+The project ID is resolved automatically:
+  - From LAKEBASE_PROJECT_ID env var if set
+  - Otherwise, auto-discovered by matching PGHOST against accessible Lakebase projects
+
 Provides both single connections and a connection pool for high-throughput workloads.
 """
 
 import asyncio
+import logging
 import os
 import time
 import threading
@@ -18,6 +23,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+logger = logging.getLogger(__name__)
 
 _workspace_client = None
 _current_token: str | None = None
@@ -27,6 +33,8 @@ _TOKEN_REFRESH_INTERVAL = 2700  # 45 minutes (tokens expire at 60 min)
 _connection_pools: dict[str, ConnectionPool] = {}
 _pool_lock = threading.Lock()
 
+_resolved_project_id: str | None = None
+
 
 def _get_workspace_client():
     global _workspace_client
@@ -34,6 +42,65 @@ def _get_workspace_client():
         from databricks.sdk import WorkspaceClient
         _workspace_client = WorkspaceClient()
     return _workspace_client
+
+
+def get_project_id() -> str:
+    """Resolve the Lakebase project ID (cached after first call).
+
+    Resolution order:
+      1. LAKEBASE_PROJECT_ID env var (explicit config)
+      2. Auto-discover by matching PGHOST against accessible project endpoints
+    """
+    global _resolved_project_id
+    if _resolved_project_id:
+        return _resolved_project_id
+
+    pid = os.getenv("LAKEBASE_PROJECT_ID", "").strip()
+    if pid:
+        _resolved_project_id = pid
+        logger.info("Project ID from env: %s", pid)
+        return pid
+
+    pghost = os.getenv("PGHOST", "")
+    if pghost:
+        try:
+            w = _get_workspace_client()
+            for project in w.postgres.list_projects():
+                proj_name = project.name or ""
+                proj_id = proj_name.split("/")[-1] if "/" in proj_name else proj_name
+                try:
+                    endpoints = list(w.postgres.list_endpoints(
+                        parent=f"projects/{proj_id}/branches/production"
+                    ))
+                    for ep in endpoints:
+                        detail = w.postgres.get_endpoint(name=ep.name)
+                        if (detail.status and detail.status.hosts
+                                and detail.status.hosts.host == pghost):
+                            _resolved_project_id = proj_id
+                            logger.info("Auto-discovered project ID from PGHOST: %s", proj_id)
+                            return proj_id
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning("Project auto-discovery failed: %s", e)
+
+    raise RuntimeError(
+        "Cannot determine LAKEBASE_PROJECT_ID. "
+        "Set it in app.yaml or attach a Lakebase database resource to the app."
+    )
+
+
+def get_schema() -> str:
+    """Resolve the Lakebase schema name.
+
+    Resolution order:
+      1. LAKEBASE_SCHEMA env var (explicit config)
+      2. Derived from project ID: lakebase-lab-foo → lakebase_lab_foo
+    """
+    explicit = os.getenv("LAKEBASE_SCHEMA", "").strip()
+    if explicit:
+        return explicit
+    return get_project_id().replace("-", "_")
 
 
 def _refresh_token() -> str:
@@ -45,10 +112,10 @@ def _refresh_token() -> str:
         return _current_token
 
     w = _get_workspace_client()
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
     branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
 
-    if project_id:
+    try:
+        project_id = get_project_id()
         endpoints = list(
             w.postgres.list_endpoints(
                 parent=f"projects/{project_id}/branches/{branch_id}"
@@ -57,7 +124,7 @@ def _refresh_token() -> str:
         endpoint_name = endpoints[0].name if endpoints else None
         cred = w.postgres.generate_database_credential(endpoint=endpoint_name)
         _current_token = cred.token
-    else:
+    except RuntimeError:
         _current_token = w.config.oauth_token().access_token
 
     _last_refresh = now
@@ -69,8 +136,7 @@ def _build_conninfo(branch_id: str | None = None) -> str:
     pghost = os.getenv("PGHOST")
     pguser = os.getenv("PGUSER")
     pgdatabase = os.getenv("PGDATABASE", "databricks_postgres")
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    schema = get_schema()
 
     if not branch_id:
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
@@ -82,29 +148,26 @@ def _build_conninfo(branch_id: str | None = None) -> str:
             f"password={token} sslmode=require "
             f"options=-c\\ search_path={schema},public"
         )
-    elif project_id:
-        w = _get_workspace_client()
-        endpoints = list(
-            w.postgres.list_endpoints(
-                parent=f"projects/{project_id}/branches/{branch_id}"
-            )
-        )
-        if not endpoints:
-            raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
 
-        ep = w.postgres.get_endpoint(name=endpoints[0].name)
-        host = ep.status.hosts.host
-        cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-        username = w.current_user.me().user_name
-        return (
-            f"host={host} dbname={pgdatabase} user={username} "
-            f"password={cred.token} sslmode=require "
-            f"options=-c\\ search_path={schema},public"
+    project_id = get_project_id()
+    w = _get_workspace_client()
+    endpoints = list(
+        w.postgres.list_endpoints(
+            parent=f"projects/{project_id}/branches/{branch_id}"
         )
-    else:
-        raise RuntimeError(
-            "Set PGHOST/PGUSER or LAKEBASE_PROJECT_ID to connect to Lakebase"
-        )
+    )
+    if not endpoints:
+        raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
+
+    ep = w.postgres.get_endpoint(name=endpoints[0].name)
+    host = ep.status.hosts.host
+    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+    username = w.current_user.me().user_name
+    return (
+        f"host={host} dbname={pgdatabase} user={username} "
+        f"password={cred.token} sslmode=require "
+        f"options=-c\\ search_path={schema},public"
+    )
 
 
 def _get_connection_params(branch_id: str | None = None) -> dict:
@@ -112,17 +175,16 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
     pghost = os.getenv("PGHOST")
     pguser = os.getenv("PGUSER")
     pgdatabase = os.getenv("PGDATABASE", "databricks_postgres")
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
 
     if not branch_id:
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
 
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    schema = get_schema()
     search_path_opt = f"-c search_path={schema},public"
 
     if pghost and pguser:
         token = _refresh_token()
-        params = {
+        return {
             "host": pghost,
             "dbname": pgdatabase,
             "user": pguser,
@@ -130,35 +192,30 @@ def _get_connection_params(branch_id: str | None = None) -> dict:
             "sslmode": "require",
             "options": search_path_opt,
         }
-    elif project_id:
-        w = _get_workspace_client()
-        endpoints = list(
-            w.postgres.list_endpoints(
-                parent=f"projects/{project_id}/branches/{branch_id}"
-            )
+
+    project_id = get_project_id()
+    w = _get_workspace_client()
+    endpoints = list(
+        w.postgres.list_endpoints(
+            parent=f"projects/{project_id}/branches/{branch_id}"
         )
-        if not endpoints:
-            raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
+    )
+    if not endpoints:
+        raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
 
-        ep = w.postgres.get_endpoint(name=endpoints[0].name)
-        host = ep.status.hosts.host
-        cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-        username = w.current_user.me().user_name
+    ep = w.postgres.get_endpoint(name=endpoints[0].name)
+    host = ep.status.hosts.host
+    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+    username = w.current_user.me().user_name
 
-        params = {
-            "host": host,
-            "dbname": pgdatabase,
-            "user": username,
-            "password": cred.token,
-            "sslmode": "require",
-            "options": search_path_opt,
-        }
-    else:
-        raise RuntimeError(
-            "Set PGHOST/PGUSER or LAKEBASE_PROJECT_ID to connect to Lakebase"
-        )
-
-    return params
+    return {
+        "host": host,
+        "dbname": pgdatabase,
+        "user": username,
+        "password": cred.token,
+        "sslmode": "require",
+        "options": search_path_opt,
+    }
 
 
 def get_pool(branch_id: str | None = None, min_size: int = 4, max_size: int = 20) -> ConnectionPool:

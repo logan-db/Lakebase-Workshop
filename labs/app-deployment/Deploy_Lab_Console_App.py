@@ -28,9 +28,13 @@
 # MAGIC ## Prerequisites
 # MAGIC
 # MAGIC 1. **`setup.sh` was run** — this deploys all notebooks, labs, and the Lab Console app via a Databricks Asset Bundle
-# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists and your user schema is seeded
-# MAGIC 3. **Lakebase database added as app resource** — after notebook 00, add the postgres resource to the app
-# MAGIC    (Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database)
+# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists, schema is seeded, and the
+# MAGIC    Lakebase database is automatically attached to the app as a resource
+# MAGIC
+# MAGIC > **Multi-user note:** Each user gets their own app instance. The app name includes your
+# MAGIC > username (e.g. `lakebase-lab-logan-rupert`). The app automatically discovers
+# MAGIC > which Lakebase project to connect to based on the attached database resource — no
+# MAGIC > manual `LAKEBASE_PROJECT_ID` configuration needed.
 
 # COMMAND ----------
 
@@ -46,7 +50,7 @@
 # MAGIC databricks bundle deploy --target dev
 # MAGIC ```
 # MAGIC
-# MAGIC Then open the app: **Compute → Apps → lakebase-lab-console**
+# MAGIC Then open the app: **Compute → Apps → lakebase-lab-`<your-short-name>`**
 
 # COMMAND ----------
 
@@ -66,19 +70,24 @@
 # MAGIC   - --port
 # MAGIC   - "8000"
 # MAGIC env:
-# MAGIC   - name: LAKEBASE_PROJECT_ID
-# MAGIC     value: <your-project-id>
+# MAGIC   # Project ID and schema are auto-discovered from the attached postgres resource.
+# MAGIC   # Only uncomment if you need to override:
+# MAGIC   # - name: LAKEBASE_PROJECT_ID
+# MAGIC   #   value: lakebase-lab-<your-username>
+# MAGIC   # - name: LAKEBASE_SCHEMA
+# MAGIC   #   value: lakebase_lab_<your_username>
 # MAGIC   - name: LAKEBASE_BRANCH_ID
 # MAGIC     value: production
-# MAGIC   - name: LAKEBASE_SCHEMA
-# MAGIC     value: <your-schema>   # same as PG_SCHEMA from notebook 00 (e.g. lakebase_lab_<username>)
 # MAGIC resources:
 # MAGIC   - name: lakebase-db
 # MAGIC     type: postgres
 # MAGIC ```
 # MAGIC
-# MAGIC After running notebook `00`, update `LAKEBASE_PROJECT_ID` and `LAKEBASE_SCHEMA` in `app.yaml` with
-# MAGIC your project ID and schema (same values as `PROJECT_ID` / `PG_SCHEMA` printed in the setup notebook).
+# MAGIC The app automatically discovers its Lakebase project and schema:
+# MAGIC - **Project ID**: matched by comparing `PGHOST` against accessible project endpoints
+# MAGIC - **Schema**: derived from the project ID (`lakebase-lab-foo` → `lakebase_lab_foo`)
+# MAGIC
+# MAGIC No manual configuration is needed.
 
 # COMMAND ----------
 
@@ -115,12 +124,15 @@
 # MAGIC ### Step 2: Grant schema and object access
 # MAGIC
 # MAGIC ```sql
+# MAGIC -- Replace <your_schema> with your schema name (e.g. lakebase_lab_jane_doe)
 # MAGIC GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 # MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 # MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
 # MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
 # MAGIC   GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
 # MAGIC ```
+# MAGIC
+# MAGIC The code cell below runs these grants automatically using `PG_SCHEMA` from `_setup`.
 # MAGIC
 # MAGIC Both steps can be run from the **Lakebase SQL Editor**, **this notebook** (code cell below),
 # MAGIC or any PostgreSQL client connected to the instance.
@@ -151,7 +163,10 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-APP_NAME = "lakebase-lab-console"
+username_part = _sanitize(user_email)
+APP_NAME = f"lakebase-lab-{username_part}"
+if len(APP_NAME) > 30:
+    APP_NAME = APP_NAME[:30].rstrip("-")
 
 app = w.apps.get(name=APP_NAME)
 sp = w.service_principals.get(id=app.service_principal_id)

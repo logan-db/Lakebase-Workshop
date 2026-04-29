@@ -136,6 +136,10 @@ The `apps/lakebase-lab-console/` folder contains an interactive **React + FastAP
 | API Tester | Raw SQL execution against any branch |
 | Agent Memory | Session/message management |
 
+### Multi-user support
+
+Each user gets their own app instance — the bundle names it `lakebase-lab-<your-short-name>`. The app auto-discovers its Lakebase project and schema from the attached database resource, so no manual configuration is needed.
+
 ## Architecture
 
 ```
@@ -151,6 +155,18 @@ FastAPI Backend (Databricks App)
     v
 Lakebase Autoscaling (PostgreSQL)
     Project > Branch > Endpoint
+```
+
+### Per-user resource hierarchy
+
+```
+Databricks Workspace
+└── Lakebase Project: lakebase-lab-<username>
+    └── Branch: production
+        └── Endpoint (autoscaling, 0.5+ CU)
+            └── Database: databricks_postgres
+                └── Schema: lakebase_lab_<username>
+                    └── Tables: products, events, agent_sessions, ...
 ```
 
 ## Repository Structure

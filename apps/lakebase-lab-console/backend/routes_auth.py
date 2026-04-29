@@ -6,6 +6,8 @@ import os
 
 from fastapi import APIRouter, HTTPException
 
+from .db import get_project_id, get_schema
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
@@ -16,11 +18,8 @@ def generate_credential():
         from databricks.sdk import WorkspaceClient
 
         w = WorkspaceClient()
-        project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
+        project_id = get_project_id()
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
-
-        if not project_id:
-            raise HTTPException(400, "LAKEBASE_PROJECT_ID not configured")
 
         endpoints = list(
             w.postgres.list_endpoints(
@@ -77,7 +76,7 @@ def list_grants():
     try:
         from backend.db import execute_query
 
-        schema = os.getenv("LAKEBASE_SCHEMA", "public")
+        schema = get_schema()
         rows = execute_query(
             """
             SELECT grantee, privilege_type, table_name
@@ -98,7 +97,10 @@ def connection_info():
     try:
         from databricks.sdk import WorkspaceClient
 
-        project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
+        try:
+            project_id = get_project_id()
+        except RuntimeError:
+            project_id = ""
         branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
         pghost = os.getenv("PGHOST", "")
 

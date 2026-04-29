@@ -192,11 +192,13 @@ For a guided workshop, direct participants to specific paths based on the timing
 
 ### 5. (Optional) Deploy the Lab Console app
 
-For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Console_App`. This requires:
+For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Console_App`. Each user gets their own app instance:
 
-1. Deploying via `databricks bundle deploy` (the pre-built frontend is included)
-2. Adding the Lakebase database as a resource in the Apps UI
-3. Granting SP permissions (see `docs/PERMISSIONS.md`)
+1. `databricks bundle deploy` creates `lakebase-lab-<short_name>` per user
+2. Add the user's Lakebase database as a resource in the Apps UI
+3. Grant SP permissions (see `docs/PERMISSIONS.md`)
+
+The app auto-discovers its project ID and schema from the attached database resource — no manual `app.yaml` editing needed.
 
 ## Demo Script
 
@@ -305,6 +307,7 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 | "password authentication failed" | Token expired (1h TTL). Re-run the connection cell. |
 | "permission denied for table" | Run the GRANT statements from `docs/PERMISSIONS.md` |
 | Lab Console shows "Loading..." forever | Check `/api/dbtest` — likely missing DB resource or SP permissions |
+| Lab Console can't discover project | Set `LAKEBASE_PROJECT_ID` explicitly in app.yaml as a fallback |
 
 ## Cleanup
 

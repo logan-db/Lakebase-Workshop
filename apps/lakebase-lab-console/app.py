@@ -50,9 +50,16 @@ STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
 
 @app.get("/api/health")
 def health():
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "NOT SET")
+    from backend.db import get_project_id, get_schema
+    try:
+        project_id = get_project_id()
+    except RuntimeError:
+        project_id = "NOT SET (auto-discovery pending)"
     pghost = os.getenv("PGHOST", "NOT SET")
-    schema = os.getenv("LAKEBASE_SCHEMA", "NOT SET")
+    try:
+        schema = get_schema()
+    except RuntimeError:
+        schema = "NOT SET"
     return {
         "status": "ok",
         "project_id": project_id,
@@ -64,14 +71,23 @@ def health():
 
 @app.get("/api/config")
 def get_config():
+    from backend.db import get_project_id, get_schema
     host = os.getenv("DATABRICKS_HOST", "")
     if host and not host.startswith("https://"):
         host = f"https://{host}"
+    try:
+        project_id = get_project_id()
+    except RuntimeError:
+        project_id = ""
+    try:
+        schema = get_schema()
+    except RuntimeError:
+        schema = ""
     return {
-        "project_id": os.getenv("LAKEBASE_PROJECT_ID", ""),
+        "project_id": project_id,
         "branch_id": os.getenv("LAKEBASE_BRANCH_ID", "production"),
         "database": os.getenv("PGDATABASE", "databricks_postgres"),
-        "schema": os.getenv("LAKEBASE_SCHEMA", "public"),
+        "schema": schema,
         "pghost_set": bool(os.getenv("PGHOST")),
         "workspace_host": host,
     }

@@ -247,6 +247,82 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Step 6: Attach Database to Lab Console App
+# MAGIC Adds the Lakebase database as a resource on the Lab Console app so the app
+# MAGIC can connect automatically via injected `PGHOST`/`PGUSER` environment variables.
+
+# COMMAND ----------
+
+import json
+
+app_name = PROJECT_ID  # app uses the same naming convention
+
+branch_name = f"projects/{PROJECT_ID}/branches/production"
+
+try:
+    db_resp = w.api_client.do(
+        "GET",
+        f"/api/2.0/postgres/{branch_name}/databases",
+    )
+    databases = db_resp.get("databases", [])
+    db_resource = next(
+        (d for d in databases if d.get("status", {}).get("postgres_database") == "databricks_postgres"),
+        None,
+    )
+    if not db_resource:
+        raise ValueError("databricks_postgres database not found on production branch")
+
+    db_name = db_resource["name"]
+
+    w.api_client.do(
+        "PATCH",
+        f"/api/2.0/apps/{app_name}",
+        body={
+            "resources": [
+                {
+                    "name": "lakebase-db",
+                    "postgres": {
+                        "branch": branch_name,
+                        "database": db_name,
+                        "permission": "CAN_CONNECT_AND_CREATE",
+                    },
+                }
+            ]
+        },
+    )
+    print(f"✓ Attached Lakebase database to app '{app_name}'")
+    print(f"  Branch:   {branch_name}")
+    print(f"  Database: {db_name}")
+
+    # Grant the app's service principal access to the user's schema
+    app_info = w.api_client.do("GET", f"/api/2.0/apps/{app_name}")
+    sp_client_id = app_info.get("service_principal_client_id", "")
+    if sp_client_id:
+        cred2 = w.postgres.generate_database_credential(endpoint=endpoint.name)
+        grant_params = {**params, "password": cred2.token}
+        grant_conn = psycopg.connect(**grant_params)
+        grant_conn.autocommit = True
+        with grant_conn.cursor() as gcur:
+            gcur.execute(f'GRANT USAGE, CREATE ON SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
+            gcur.execute(f'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
+            gcur.execute(f'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
+            gcur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_client_id}"')
+            gcur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_client_id}"')
+        grant_conn.close()
+        print(f"✓ Granted schema access to app service principal")
+    else:
+        print(f"⚠ Could not determine app service principal — grant permissions manually")
+
+except Exception as e:
+    print(f"⚠ Could not attach database to app: {e}")
+    print(f"  If you deployed without the app, this is expected.")
+    print(f"  To deploy the app later, run from the repo root:")
+    print(f"    databricks bundle run lakebase_lab_console --target dev")
+    print(f"  Then re-run this cell to attach the database.")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## ✓ Setup Complete!
 # MAGIC
 # MAGIC Your Lakebase project is ready. Here's your configuration:
@@ -264,9 +340,8 @@ print(f"  Schema:        {PG_SCHEMA}")
 print(f"  Username:      {user_email}")
 print("=" * 60)
 print()
-print(f"  For app.yaml:")
-print(f"    LAKEBASE_PROJECT_ID: {PROJECT_ID}")
-print(f"    LAKEBASE_SCHEMA:     {PG_SCHEMA}")
+print("  The Lab Console app auto-discovers the project ID and schema")
+print("  from the attached database resource. No manual config needed.")
 
 # COMMAND ----------
 

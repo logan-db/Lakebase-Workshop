@@ -1,21 +1,13 @@
 """Compute / autoscaling management routes."""
 
-import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
 
-from .db import get_db_metrics
+from .db import get_db_metrics, get_project_id
 
 router = APIRouter(prefix="/api/compute", tags=["compute"])
-
-
-def _get_project_id() -> str:
-    pid = os.getenv("LAKEBASE_PROJECT_ID")
-    if not pid:
-        raise HTTPException(500, "LAKEBASE_PROJECT_ID not configured")
-    return pid
 
 
 class EndpointInfo(BaseModel):
@@ -41,10 +33,10 @@ class UpdateComputeRequest(BaseModel):
 def list_endpoints(branch_id: str):
     """List compute endpoints for a branch, enriched with live DB metrics."""
     w = WorkspaceClient()
-    project_id = _get_project_id()
+    pid = get_project_id()
     endpoints = list(
         w.postgres.list_endpoints(
-            parent=f"projects/{project_id}/branches/{branch_id}"
+            parent=f"projects/{pid}/branches/{branch_id}"
         )
     )
 
@@ -80,8 +72,8 @@ def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest):
         )
 
     w = WorkspaceClient()
-    project_id = _get_project_id()
-    ep_name = f"projects/{project_id}/branches/{branch_id}/endpoints/{endpoint_id}"
+    pid = get_project_id()
+    ep_name = f"projects/{pid}/branches/{branch_id}/endpoints/{endpoint_id}"
 
     try:
         w.postgres.update_endpoint(
