@@ -3,7 +3,7 @@ import { api } from './api'
 import {
   LayoutDashboard, TrendingUp, GitBranch, Cpu,
   Database, RefreshCw, Bot, Terminal, Layers, Sun, Moon, ExternalLink,
-  Activity, Table
+  Activity, Key, Shield
 } from './icons'
 import Dashboard from './pages/Dashboard'
 import BranchManager from './pages/BranchManager'
@@ -16,6 +16,8 @@ import ApiTester from './pages/ApiTester'
 import AgentMemory from './pages/AgentMemory'
 import ObservabilityPage from './pages/ObservabilityPage'
 import FeatureStorePage from './pages/FeatureStorePage'
+import AuthPage from './pages/AuthPage'
+import BackupRecoveryPage from './pages/BackupRecoveryPage'
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'overview' },
@@ -25,6 +27,8 @@ const NAV_ITEMS = [
   { id: 'sync', label: 'Reverse ETL', Icon: RefreshCw, section: 'labs' },
   { id: 'feature-store', label: 'Feature Store', Icon: Layers, section: 'labs' },
   { id: 'agent', label: 'Agent Memory', Icon: Bot, section: 'labs' },
+  { id: 'auth', label: 'Auth & Permissions', Icon: Key, section: 'labs' },
+  { id: 'backup', label: 'Backup & Recovery', Icon: Shield, section: 'labs' },
   { id: 'branches', label: 'Branches', Icon: GitBranch, section: 'manage' },
   { id: 'compute', label: 'Compute', Icon: Cpu, section: 'manage' },
   { id: 'api', label: 'API Tester', Icon: Terminal, section: 'tools' },
@@ -74,6 +78,8 @@ export default function App() {
       case 'agent': return <AgentMemory />
       case 'observability': return <ObservabilityPage />
       case 'feature-store': return <FeatureStorePage />
+      case 'auth': return <AuthPage />
+      case 'backup': return <BackupRecoveryPage />
       default: return <Dashboard onNavigate={setActivePage} />
     }
   }

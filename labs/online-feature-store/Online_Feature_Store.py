@@ -8,9 +8,9 @@
 # MAGIC
 # MAGIC In this notebook you will:
 # MAGIC 1. Create a feature table in Unity Catalog
-# MAGIC 2. Provision an online feature store (backed by Lakebase Autoscaling)
-# MAGIC 3. Publish features for low-latency serving
-# MAGIC 4. Explore online features through the Lakebase PostgreSQL interface
+# MAGIC 2. Publish features to your existing Lakebase project for low-latency serving
+# MAGIC 3. Verify online features via direct PostgreSQL access
+# MAGIC 4. Update features and re-publish incrementally
 # MAGIC 5. Clean up resources
 # MAGIC
 # MAGIC **Requirements:**
@@ -18,10 +18,13 @@
 # MAGIC - **DBR 16.4 LTS ML** or **serverless** compute
 # MAGIC - A Unity Catalog catalog & schema with write access
 # MAGIC
-# MAGIC > **Why Lakebase?** Databricks Online Feature Stores are backed by Lakebase
-# MAGIC > Autoscaling — the same managed PostgreSQL you explored in other labs. This
-# MAGIC > means your online features get automatic scaling, low-latency reads, and
-# MAGIC > direct PostgreSQL access out of the box.
+# MAGIC > **Why Lakebase?** Databricks Online Feature Stores are powered by Lakebase
+# MAGIC > Autoscaling — the same managed PostgreSQL you explored in other labs. Your
+# MAGIC > feature tables are published directly into your existing Lakebase project as
+# MAGIC > PostgreSQL tables, so you get automatic scaling, low-latency reads, and direct
+# MAGIC > PostgreSQL access without provisioning a separate instance.
+# MAGIC >
+# MAGIC > **Docs:** [Databricks Online Feature Stores](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)
 
 # COMMAND ----------
 
@@ -47,8 +50,16 @@ print(f"✓ Feature Engineering client initialized")
 # MAGIC %md
 # MAGIC ## Configuration
 # MAGIC
-# MAGIC Set your catalog and schema below. The online store name is scoped to your
-# MAGIC user — each participant gets their own Lakebase Autoscaling instance.
+# MAGIC The online store reuses your existing Lakebase project (`PROJECT_ID` from the
+# MAGIC foundation notebook). Feature tables are published into the same Lakebase
+# MAGIC instance alongside your workshop data — no separate instance needed.
+# MAGIC
+# MAGIC The [Databricks documentation](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)
+# MAGIC recommends this approach under **Cost optimization best practices**:
+# MAGIC > *Reuse online stores: You can publish multiple feature tables to a single
+# MAGIC > online store. For development, testing, and training scenarios, we recommend
+# MAGIC > sharing one online store across multiple projects or users rather than
+# MAGIC > creating separate stores.*
 
 # COMMAND ----------
 
@@ -57,13 +68,13 @@ UC_SCHEMA = f"lakebase_lab_{_sanitize(user_email).replace('-', '_')}"
 
 FEATURE_TABLE = f"{UC_CATALOG}.{UC_SCHEMA}.customer_features"
 ONLINE_TABLE = f"{UC_CATALOG}.{UC_SCHEMA}.customer_features_online"
-ONLINE_STORE_NAME = f"feature-store-{_sanitize(user_email)}"
+ONLINE_STORE_NAME = PROJECT_ID
 
 print(f"Catalog:       {UC_CATALOG}")
 print(f"Schema:        {UC_SCHEMA}")
 print(f"Feature table: {FEATURE_TABLE}")
 print(f"Online table:  {ONLINE_TABLE}")
-print(f"Online store:  {ONLINE_STORE_NAME}")
+print(f"Online store:  {ONLINE_STORE_NAME}  (reusing existing Lakebase project)")
 
 # COMMAND ----------
 
@@ -73,10 +84,12 @@ print(f"Online store:  {ONLINE_STORE_NAME}")
 # MAGIC The offline feature table lives in Unity Catalog as a regular Delta table.
 # MAGIC Before it can be published to an online store, it needs:
 # MAGIC - A **primary key** constraint (non-nullable)
-# MAGIC - **Change Data Feed** enabled (for incremental sync)
+# MAGIC - **[Change Data Feed](https://docs.databricks.com/aws/en/delta/delta-change-data-feed)** enabled (for incremental sync)
 # MAGIC
 # MAGIC We'll use the Feature Engineering client to create the table with the proper
 # MAGIC primary key, then enable CDF separately.
+# MAGIC
+# MAGIC See: [Prerequisites for publishing to online stores](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#prerequisites-for-publishing-to-online-stores)
 
 # COMMAND ----------
 
@@ -131,66 +144,56 @@ SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
 """)
 print(f"✓ Change Data Feed enabled on {FEATURE_TABLE}")
 
+# COMMAND ----------
+
+from pyspark.sql import Window
+from pyspark.sql.functions import row_number
+
+total = spark.sql(f"SELECT COUNT(*) AS n FROM {FEATURE_TABLE}").first()["n"]
+distinct = spark.sql(f"SELECT COUNT(DISTINCT customer_id) AS n FROM {FEATURE_TABLE}").first()["n"]
+
+if total != distinct:
+    print(f"⚠ Found {total - distinct} duplicate rows — deduplicating...")
+    _w = Window.partitionBy("customer_id").orderBy("customer_id")
+    deduped = (
+        spark.read.table(FEATURE_TABLE)
+        .withColumn("_rn", row_number().over(_w))
+        .filter("_rn = 1")
+        .drop("_rn")
+    )
+    deduped.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(FEATURE_TABLE)
+    spark.sql(f"ALTER TABLE {FEATURE_TABLE} SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')")
+    new_count = spark.sql(f"SELECT COUNT(*) AS n FROM {FEATURE_TABLE}").first()["n"]
+    print(f"✓ Deduplicated: {total} → {new_count} rows")
+else:
+    print(f"✓ No duplicates found ({total} rows, {distinct} distinct keys)")
+
 display(spark.sql(f"SELECT * FROM {FEATURE_TABLE} ORDER BY customer_id"))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Create an Online Feature Store
+# MAGIC ## 2. Verify the Online Store (Existing Lakebase Project)
 # MAGIC
-# MAGIC The `create_online_store` API provisions a **Lakebase Autoscaling** instance
-# MAGIC dedicated to serving features at low latency. This is the same managed
-# MAGIC PostgreSQL service you used in the other workshop labs — but created and
-# MAGIC managed through the Feature Engineering client.
+# MAGIC Unlike creating a dedicated online store with `fe.create_online_store()`, we
+# MAGIC reuse the Lakebase Autoscaling project you already provisioned in the
+# MAGIC foundation notebook. The Feature Engineering client can reference **any**
+# MAGIC Lakebase Autoscaling project as an online store via `fe.get_online_store()`.
 # MAGIC
-# MAGIC | Capacity | CU Range | Use Case |
-# MAGIC |----------|----------|----------|
-# MAGIC | CU_1 | Smallest | Dev/test, small feature sets |
-# MAGIC | CU_2 | Medium | Production, moderate traffic |
-# MAGIC | CU_4 | Large | High throughput |
-# MAGIC | CU_8 | Largest | Very high concurrency |
+# MAGIC From the [documentation](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#publish-a-feature-table):
+# MAGIC > *For Lakebase Autoscaling projects created using the Lakebase API or UI,
+# MAGIC > `name` is the last part of the resource name: `projects/{online_store_name}`*
+# MAGIC
+# MAGIC This means your workshop project serves double duty: operational data **and**
+# MAGIC real-time feature serving — all from one Lakebase instance.
 
 # COMMAND ----------
 
-try:
-    existing = fe.get_online_store(name=ONLINE_STORE_NAME)
-    print(f"Online store already exists: {ONLINE_STORE_NAME} (state: {existing.state})")
-except Exception:
-    fe.create_online_store(
-        name=ONLINE_STORE_NAME,
-        capacity="CU_1",
-    )
-    print(f"✓ Online store creation initiated: {ONLINE_STORE_NAME}")
-    print("  This provisions a Lakebase Autoscaling instance (takes 2–4 minutes)...")
-
-# COMMAND ----------
-
-import time
-
-TIMEOUT_MINUTES = 15
-print(f"Waiting for online store '{ONLINE_STORE_NAME}' to become available (timeout: {TIMEOUT_MINUTES} min)...")
-deadline = time.monotonic() + TIMEOUT_MINUTES * 60
-
-while True:
-    store = fe.get_online_store(name=ONLINE_STORE_NAME)
-    state_str = str(store.state).upper()
-    print(f"  State: {store.state}  (raw: {state_str})")
-
-    if "AVAILABLE" in state_str or "ACTIVE" in state_str:
-        break
-    if any(s in state_str for s in ("FAILED", "DELETED", "ERROR")):
-        raise RuntimeError(f"Online store failed with state: {store.state}")
-    if time.monotonic() > deadline:
-        raise TimeoutError(
-            f"Online store did not become available within {TIMEOUT_MINUTES} minutes. "
-            f"Last state: {store.state}. Check the Lakebase UI."
-        )
-    time.sleep(15)
-
-print(f"\n✓ Online store is ready!")
-print(f"  Name:     {store.name}")
-print(f"  State:    {store.state}")
-print(f"  Capacity: {store.capacity}")
+online_store = fe.get_online_store(name=ONLINE_STORE_NAME)
+print(f"✓ Online store ready (reusing existing Lakebase project)")
+print(f"  Name:     {online_store.name}")
+print(f"  State:    {online_store.state}")
+print(f"  Capacity: {online_store.capacity}")
 
 # COMMAND ----------
 
@@ -198,19 +201,29 @@ print(f"  Capacity: {store.capacity}")
 # MAGIC ## 3. Publish Features to Online Store
 # MAGIC
 # MAGIC Publishing syncs your offline feature table into the online store for
-# MAGIC low-latency reads. The default **TRIGGERED** mode does a one-time sync —
-# MAGIC you can re-run `publish_table` to push updates, or switch to **CONTINUOUS**
-# MAGIC mode for streaming sync.
+# MAGIC low-latency reads. The default **TRIGGERED** mode does a one-time incremental
+# MAGIC sync — you can re-run `publish_table` to push updates, or switch to
+# MAGIC **CONTINUOUS** mode for streaming sync.
 # MAGIC
 # MAGIC | Publish Mode | Behavior |
 # MAGIC |-------------|----------|
 # MAGIC | TRIGGERED | Incremental sync on each `publish_table` call (default) |
 # MAGIC | CONTINUOUS | Streaming pipeline — updates immediately as source changes |
 # MAGIC | SNAPSHOT | Full copy — best when most rows change between syncs |
+# MAGIC
+# MAGIC See: [Publish modes](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#publish-modes)
 
 # COMMAND ----------
 
-online_store = fe.get_online_store(name=ONLINE_STORE_NAME)
+try:
+    ot = w.online_tables.get(name=ONLINE_TABLE)
+    state = str(getattr(getattr(ot, "status", None), "detailed_state", "")).upper()
+    if "FAILED" in state or "ERROR" in state:
+        print(f"⚠ Online table in error state ({state}) — deleting and re-creating...")
+        w.feature_store.delete_online_table(online_table_name=ONLINE_TABLE)
+        import time; time.sleep(5)
+except Exception:
+    pass
 
 fe.publish_table(
     online_store=online_store,
@@ -236,16 +249,21 @@ print(f"  Publish mode:  TRIGGERED (default)")
 stores = fe.list_online_stores()
 print("Accessible online stores:")
 for s in stores:
-    print(f"  {s.name} | State: {s.state} | Capacity: {s.capacity}")
+    marker = " ← yours" if s.name and ONLINE_STORE_NAME in s.name else ""
+    print(f"  {s.name} | State: {s.state} | Capacity: {s.capacity}{marker}")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 5. Explore Online Features via Lakebase
 # MAGIC
-# MAGIC Since the online store IS a Lakebase Autoscaling instance, you can connect
-# MAGIC directly with standard PostgreSQL tools. This is the same `psycopg` +
-# MAGIC `w.postgres` pattern you used in the other workshop labs.
+# MAGIC Since the online store IS your Lakebase project, you can connect directly with
+# MAGIC the same `get_connection()` helper you used in other labs. The feature tables
+# MAGIC appear as PostgreSQL tables inside `databricks_postgres`.
+# MAGIC
+# MAGIC You can also explore online features through the
+# MAGIC [Unity Catalog UI](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#explore-and-query-online-features)
+# MAGIC or the [SQL Editor](https://docs.databricks.com/aws/en/oltp/instances/query/sql-editor).
 # MAGIC
 # MAGIC > **Note:** If the publish pipeline is still running, the feature table may
 # MAGIC > not appear yet. Wait a minute and re-run this section.
@@ -253,44 +271,39 @@ for s in stores:
 # COMMAND ----------
 
 try:
-    endpoints = list(w.postgres.list_endpoints(
-        parent=f"projects/{ONLINE_STORE_NAME}/branches/production"
-    ))
-    if not endpoints:
-        print("⏳ No endpoints found yet — the online store may still be initializing.")
-        print("   Wait a minute and re-run this cell.")
-    else:
-        ep = w.postgres.get_endpoint(name=endpoints[0].name)
-        host = ep.status.hosts.host
-        cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+    ep_name = get_endpoint_name("production")
+    ep = w.postgres.get_endpoint(name=ep_name)
+    host = ep.status.hosts.host
+    cred = w.postgres.generate_database_credential(endpoint=ep_name)
 
-        import psycopg
-        from psycopg.rows import dict_row
+    import psycopg
+    from psycopg.rows import dict_row
 
-        fs_conn = psycopg.connect(
-            host=host, dbname="databricks_postgres",
-            user=user_email, password=cred.token,
-            sslmode="require", row_factory=dict_row,
-        )
-        print(f"✓ Connected directly to online store: {host}")
+    fs_conn = psycopg.connect(
+        host=host, dbname="databricks_postgres",
+        user=user_email, password=cred.token,
+        sslmode="require", row_factory=dict_row,
+    )
+    print(f"✓ Connected to Lakebase project: {host}")
 
-        with fs_conn.cursor() as cur:
-            cur.execute("""
-                SELECT schemaname, tablename
-                FROM pg_tables
-                WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'pg_internal')
-                ORDER BY schemaname, tablename
-            """)
-            tables = cur.fetchall()
-            print(f"\nTables in the online store ({len(tables)} found):")
-            for row in tables:
-                print(f"  {row['schemaname']}.{row['tablename']}")
+    with fs_conn.cursor() as cur:
+        cur.execute("""
+            SELECT schemaname, tablename
+            FROM pg_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'pg_internal')
+            ORDER BY schemaname, tablename
+        """)
+        tables = cur.fetchall()
+        print(f"\nTables in the Lakebase project ({len(tables)} found):")
+        for row in tables:
+            label = " ← feature table" if "feature" in row['tablename'].lower() else ""
+            print(f"  {row['schemaname']}.{row['tablename']}{label}")
 
-        fs_conn.close()
-        print("\n✓ Connection closed")
+    fs_conn.close()
+    print("\n✓ Connection closed")
 
 except Exception as e:
-    print(f"Could not connect to online store Lakebase instance: {e}")
+    print(f"Could not connect to Lakebase project: {e}")
     print("\nThis can happen if the publish pipeline is still running.")
     print("You can also query online features through the SQL editor in the")
     print("Databricks workspace UI — navigate to the online store in Catalog Explorer.")
@@ -301,23 +314,30 @@ except Exception as e:
 # MAGIC ## 6. Update Features and Re-publish
 # MAGIC
 # MAGIC In a real workflow, features are updated by your batch or streaming pipelines.
-# MAGIC Here we simulate adding new customers and re-publishing.
+# MAGIC Here we simulate adding new customers and re-publishing. The **TRIGGERED**
+# MAGIC mode incrementally syncs only the new/changed rows.
 
 # COMMAND ----------
 
 from datetime import date
+from delta.tables import DeltaTable
 
 new_customers = spark.createDataFrame([
     (1011, 5,  67.20, "Books",       336.00, 0.55, date(2026, 4, 22)),
     (1012, 41, 145.90, "Electronics", 5981.90, 0.10, date(2026, 4, 22)),
 ], schema=schema)
 
-new_customers.write.format("delta").mode("append").saveAsTable(FEATURE_TABLE)
-print(f"✓ Added 2 new customers to {FEATURE_TABLE}")
+dt = DeltaTable.forName(spark, FEATURE_TABLE)
+dt.alias("target").merge(
+    new_customers.alias("source"),
+    "target.customer_id = source.customer_id"
+).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+
+count = spark.sql(f"SELECT COUNT(*) AS n FROM {FEATURE_TABLE}").first()["n"]
+print(f"✓ Merged 2 customers into {FEATURE_TABLE} (total rows: {count})")
 
 # COMMAND ----------
 
-online_store = fe.get_online_store(name=ONLINE_STORE_NAME)
 fe.publish_table(
     online_store=online_store,
     source_table_name=FEATURE_TABLE,
@@ -332,8 +352,9 @@ print("  The TRIGGERED mode incrementally syncs only the new/changed rows.")
 # MAGIC ## 7. Feature Serving Endpoints
 # MAGIC
 # MAGIC To serve features to real-time applications (recommendation engines, fraud
-# MAGIC detection, personalization), create a **Feature Serving endpoint**. The
-# MAGIC endpoint handles feature lookups against the online store automatically.
+# MAGIC detection, personalization), create a
+# MAGIC **[Feature Serving endpoint](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-function-serving)**.
+# MAGIC The endpoint handles feature lookups against the online store automatically.
 # MAGIC
 # MAGIC ```python
 # MAGIC # Example — create a feature serving endpoint
@@ -354,37 +375,39 @@ print("  The TRIGGERED mode incrementally syncs only the new/changed rows.")
 # MAGIC ```
 # MAGIC
 # MAGIC For the full walkthrough, see the
-# MAGIC [Feature Serving documentation](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-serving-endpoints).
+# MAGIC [Feature Serving documentation](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-function-serving).
+# MAGIC
+# MAGIC For details on how models automatically look up features at inference time, see
+# MAGIC [Use features in online workflows](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-workflows).
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Cleanup
 # MAGIC
-# MAGIC **Important:** Online stores continuously incur costs. Delete them when not
-# MAGIC in use. Uncomment the cells below to clean up.
+# MAGIC Uncomment the cells below to remove the feature table and online table.
 # MAGIC
-# MAGIC ⚠️ You **must** use `delete_online_table` from the SDK — do not use
-# MAGIC `DROP TABLE` in SQL, as that leaves orphaned data in the Lakebase instance.
+# MAGIC **Important:** Use `delete_online_table` from the SDK — do not use `DROP TABLE`
+# MAGIC in SQL, as that [leaves orphaned data](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store#delete-an-online-table)
+# MAGIC in the Lakebase instance.
+# MAGIC
+# MAGIC > **Note:** We do **not** delete the Lakebase project here — it's shared with
+# MAGIC > the other workshop labs. The project cleanup is handled in
+# MAGIC > `00_Setup_Lakebase_Project`.
 
 # COMMAND ----------
 
 # UNCOMMENT TO DELETE THE ONLINE TABLE:
-# w.online_tables.delete(name=ONLINE_TABLE)
+# from databricks.sdk import WorkspaceClient
+# w_cleanup = WorkspaceClient()
+# w_cleanup.feature_store.delete_online_table(online_table_name=ONLINE_TABLE)
 # print(f"✓ Deleted online table: {ONLINE_TABLE}")
 
 # COMMAND ----------
 
-# UNCOMMENT TO DELETE THE ONLINE STORE (Lakebase instance):
-# fe.delete_online_store(name=ONLINE_STORE_NAME)
-# print(f"✓ Deleted online store: {ONLINE_STORE_NAME}")
-
-# COMMAND ----------
-
-# UNCOMMENT TO DROP THE SOURCE FEATURE TABLE AND SCHEMA:
+# UNCOMMENT TO DROP THE SOURCE FEATURE TABLE:
 # spark.sql(f"DROP TABLE IF EXISTS {FEATURE_TABLE}")
-# spark.sql(f"DROP SCHEMA IF EXISTS {UC_CATALOG}.{UC_SCHEMA} CASCADE")
-# print(f"✓ Dropped {FEATURE_TABLE} and schema {UC_SCHEMA}")
+# print(f"✓ Dropped feature table: {FEATURE_TABLE}")
 
 # COMMAND ----------
 
@@ -403,3 +426,9 @@ print("  The TRIGGERED mode incrementally syncs only the new/changed rows.")
 # MAGIC | **Backup & Recovery** | `labs/backup-recovery/` | Point-in-time recovery, branch snapshots, instant restore |
 # MAGIC | **Agentic Memory** | `labs/agentic-memory/` | Persistent AI agent memory with session/message storage |
 # MAGIC | **App Deployment** | `labs/app-deployment/` | Full-stack React + FastAPI app using Lakebase (capstone) |
+# MAGIC
+# MAGIC **Further Reading:**
+# MAGIC - [Databricks Online Feature Stores](https://docs.databricks.com/aws/en/machine-learning/feature-store/online-feature-store)
+# MAGIC - [Feature Serving Endpoints](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-function-serving)
+# MAGIC - [Feature Engineering in Databricks](https://docs.databricks.com/aws/en/machine-learning/feature-store/)
+# MAGIC - [Lakebase Autoscaling](https://docs.databricks.com/aws/en/oltp/projects/)

@@ -11,6 +11,7 @@ build/
 .eggs/
 
 node_modules/
+**/dist/
 
 *.env
 .env.local

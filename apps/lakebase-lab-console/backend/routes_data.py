@@ -1,13 +1,115 @@
 """Data playground routes: CRUD on workshop tables."""
 
 import json
+import os
 import re
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from .db import execute_query, execute_write
 
 router = APIRouter(prefix="/api/data", tags=["data"])
+
+
+@router.post("/seed")
+def seed_tables():
+    """Create workshop tables if they don't exist (idempotent)."""
+    seed_file = Path(__file__).parent.parent.parent / "bootstrap" / "seed.sql"
+    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+
+    if seed_file.exists():
+        raw = seed_file.read_text()
+    else:
+        raw = _INLINE_SEED
+
+    sql = raw.replace("{schema}", schema)
+
+    results = []
+    for stmt in sql.split(";"):
+        stmt = stmt.strip()
+        if not stmt or stmt.startswith("--"):
+            continue
+        try:
+            execute_write(stmt)
+            results.append({"sql": stmt[:80], "status": "ok"})
+        except Exception as e:
+            results.append({"sql": stmt[:80], "status": "error", "error": str(e)})
+    return {"seeded": True, "schema": schema, "statements": len(results), "results": results}
+
+
+_INLINE_SEED = """
+CREATE SCHEMA IF NOT EXISTS {schema};
+
+CREATE TABLE IF NOT EXISTS {schema}.products (
+    product_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+    stock_quantity INTEGER DEFAULT 0 CHECK (stock_quantity >= 0),
+    category VARCHAR(100),
+    tags TEXT[],
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.events (
+    event_id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    source VARCHAR(100),
+    payload JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_sessions (
+    session_id VARCHAR(64) PRIMARY KEY,
+    agent_name VARCHAR(100) NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_messages (
+    message_id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL REFERENCES {schema}.agent_sessions(session_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.agent_memory_store (
+    memory_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    topic VARCHAR(255) NOT NULL,
+    memory TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, topic)
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.audit_log (
+    audit_id SERIAL PRIMARY KEY,
+    table_name VARCHAR(100) NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    record_id INTEGER,
+    old_data JSONB,
+    new_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(100) DEFAULT CURRENT_USER
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_type ON {schema}.events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created ON {schema}.events(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON {schema}.agent_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_memory_user ON {schema}.agent_memory_store(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON {schema}.products(category);
+CREATE INDEX IF NOT EXISTS idx_products_tags ON {schema}.products USING GIN(tags);
+CREATE INDEX IF NOT EXISTS idx_audit_table ON {schema}.audit_log(table_name);
+"""
 
 
 class ProductCreate(BaseModel):

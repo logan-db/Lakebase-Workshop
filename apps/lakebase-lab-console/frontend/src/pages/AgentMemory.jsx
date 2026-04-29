@@ -15,6 +15,7 @@ function ShortTermPanel() {
   const [role, setRole] = useState('user')
   const [agentName, setAgentName] = useState('lab-agent')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const chatRef = useRef(null)
 
   const loadSessions = () => {
@@ -34,33 +35,49 @@ function ShortTermPanel() {
 
   const createSession = async () => {
     setLoading(true)
+    setError(null)
     try {
       const s = await api.createSession({ agent_name: agentName })
       loadSessions()
       setActiveSession(s.session_id)
-    } catch {}
+    } catch (e) {
+      setError(`Failed to create thread: ${e.message}`)
+    }
     setLoading(false)
   }
 
   const deleteSession = async (id) => {
+    setError(null)
     try {
       await api.deleteSession(id)
       if (activeSession === id) { setActiveSession(null); setMessages([]) }
       loadSessions()
-    } catch {}
+    } catch (e) {
+      setError(`Failed to delete thread: ${e.message}`)
+    }
   }
 
   const sendMessage = async (e) => {
     e.preventDefault()
     if (!input.trim() || !activeSession) return
+    setError(null)
     try {
       await api.appendMessage(activeSession, { role, content: input })
       setInput('')
       api.getMessages(activeSession).then(setMessages)
-    } catch {}
+    } catch (e) {
+      setError(`Failed to send message: ${e.message}`)
+    }
   }
 
   return (
+    <div>
+      {error && (
+        <div className="info-box danger" style={{ marginBottom: 12 }}>
+          <span>{error}</span>
+          <button className="btn btn-xs" onClick={() => setError(null)} style={{ marginLeft: 'auto', padding: '2px 8px' }}>&times;</button>
+        </div>
+      )}
     <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16 }}>
       <div className="card" style={{ alignSelf: 'start' }}>
         <div className="card-header">
@@ -149,6 +166,7 @@ function ShortTermPanel() {
         )}
       </div>
     </div>
+    </div>
   )
 }
 
@@ -160,6 +178,7 @@ function LongTermPanel() {
   const [topic, setTopic] = useState('')
   const [memory, setMemory] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   const loadMemories = () => {
     api.listMemories(filterUser || undefined).then(setMemories).catch(() => {})
@@ -176,25 +195,38 @@ function LongTermPanel() {
     e.preventDefault()
     if (!userId.trim() || !topic.trim() || !memory.trim()) return
     setLoading(true)
+    setError(null)
     try {
       await api.upsertMemory({ user_id: userId, topic, memory })
       setTopic('')
       setMemory('')
       loadMemories()
       loadUsers()
-    } catch {}
+    } catch (e) {
+      setError(`Failed to save memory: ${e.message}`)
+    }
     setLoading(false)
   }
 
   const deleteMemory = async (id) => {
+    setError(null)
     try {
       await api.deleteMemory(id)
       loadMemories()
       loadUsers()
-    } catch {}
+    } catch (e) {
+      setError(`Failed to delete memory: ${e.message}`)
+    }
   }
 
   return (
+    <div>
+      {error && (
+        <div className="info-box danger" style={{ marginBottom: 12 }}>
+          <span>{error}</span>
+          <button className="btn btn-xs" onClick={() => setError(null)} style={{ marginLeft: 'auto', padding: '2px 8px' }}>&times;</button>
+        </div>
+      )}
     <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 16 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="card">
@@ -302,6 +334,7 @@ function LongTermPanel() {
           </div>
         )}
       </div>
+    </div>
     </div>
   )
 }

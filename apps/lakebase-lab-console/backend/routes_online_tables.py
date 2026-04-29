@@ -1,8 +1,11 @@
-"""Online Tables / Feature Store routes via Databricks SDK."""
+"""Online Tables / Feature Store routes via Databricks SDK + REST API."""
 
+import logging
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from databricks.sdk import WorkspaceClient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/online-tables", tags=["online-tables"])
 
@@ -14,82 +17,188 @@ def _get_project_id() -> str:
     return pid
 
 
-@router.get("/stores")
-def list_online_stores():
-    """List all online stores (Lakebase-backed feature serving endpoints)."""
-    try:
-        w = WorkspaceClient()
-        project_id = _get_project_id()
-        stores = list(w.postgres.list_online_stores(
-            parent=f"projects/{project_id}"
-        ))
-        result = []
-        for store in stores:
-            info = {
-                "name": store.name,
-                "store_id": store.name.split("/")[-1] if store.name else "",
-            }
-            if hasattr(store, "status") and store.status:
-                s = store.status
-                info["state"] = str(getattr(s, "current_state", "")) if s else None
-                info["detailed_state"] = str(getattr(s, "detailed_state", "")) if s else None
-            if hasattr(store, "spec") and store.spec:
-                spec = store.spec
-                info["source_table"] = getattr(spec, "source_table_full_name", None)
-                info["primary_key_columns"] = list(getattr(spec, "primary_key_columns", []) or [])
-            result.append(info)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        if "not found" in str(e).lower() or "UNIMPLEMENTED" in str(e) or "does not have" in str(e).lower():
-            return []
-        raise HTTPException(500, f"Failed to list online stores: {e}")
+def _get_user_identifier() -> str:
+    """Derive a user identifier from LAKEBASE_SCHEMA for filtering.
 
+    LAKEBASE_SCHEMA is like 'lakebase_lab_logan_rupert' -> 'logan_rupert'
+    which maps to creator patterns like 'logan.rupert@...'
+    """
+    schema = os.getenv("LAKEBASE_SCHEMA", "")
+    prefix = "lakebase_lab_"
+    if schema.startswith(prefix):
+        return schema[len(prefix):]
+    return schema
+
+
+def _safe_attr(obj, attr, default=None):
+    return getattr(obj, attr, default) if obj else default
+
+
+def _try_rest(w, method, path, body=None):
+    """Call the Databricks REST API directly, bypassing SDK method gaps."""
+    try:
+        return w.api_client.do(method, path, body=body)
+    except Exception as e:
+        logger.warning("REST %s %s failed: %s", method, path, e)
+        return None
+
+
+# ── Online Stores (Database Instances) ──────────────────────────────────────
+
+@router.get("/stores")
+def list_online_stores(mine_only: bool = Query(True)):
+    """List database instances, optionally filtered to the current user."""
+    result = []
+    w = WorkspaceClient()
+    user_id = _get_user_identifier()
+
+    try:
+        if hasattr(w, "database") and hasattr(w.database, "list_database_instances"):
+            for inst in w.database.list_database_instances():
+                info = {
+                    "name": _safe_attr(inst, "name", ""),
+                    "store_id": _safe_attr(inst, "name", ""),
+                    "state": str(_safe_attr(inst, "state", "")),
+                    "capacity": str(_safe_attr(inst, "capacity", "")),
+                    "creator": _safe_attr(inst, "creator", ""),
+                    "read_write_dns": _safe_attr(inst, "read_write_dns", ""),
+                    "creation_time": str(_safe_attr(inst, "creation_time", "")),
+                }
+                result.append(info)
+    except Exception as e:
+        logger.warning("database.list_database_instances failed: %s", e)
+
+    if not result:
+        try:
+            resp = _try_rest(w, "GET", "/api/2.0/database/database-instances")
+            if resp and isinstance(resp, dict):
+                for inst in resp.get("database_instances", []):
+                    result.append({
+                        "name": inst.get("name", ""),
+                        "store_id": inst.get("name", ""),
+                        "state": inst.get("state", ""),
+                        "capacity": inst.get("capacity", ""),
+                        "creator": inst.get("creator", ""),
+                        "read_write_dns": inst.get("read_write_dns", ""),
+                        "creation_time": inst.get("creation_time", ""),
+                    })
+        except Exception as e:
+            logger.warning("REST list database instances failed: %s", e)
+
+    if mine_only and user_id and result:
+        user_parts = user_id.replace("_", "").replace("-", "").lower()
+        filtered = [
+            s for s in result
+            if _matches_user(s, user_parts, user_id)
+        ]
+        result = filtered
+
+    return result
+
+
+def _matches_user(store: dict, user_normalized: str, user_id: str) -> bool:
+    """Check if a database instance belongs to the current user."""
+    creator = (store.get("creator") or "").lower()
+    name = (store.get("name") or "").lower()
+    creator_norm = creator.replace(".", "").replace("@", "").replace("-", "").replace("_", "")
+    name_norm = name.replace(".", "").replace("-", "").replace("_", "")
+    return user_normalized in creator_norm or user_normalized in name_norm
+
+
+# ── Synced Tables (Reverse ETL) ────────────────────────────────────────────
 
 @router.get("/synced-tables")
 def list_synced_tables():
-    """List synced database tables (reverse ETL)."""
+    """List synced tables by scanning UC tables and probing each for sync metadata.
+
+    The SDK's list_synced_database_tables is officially unimplemented.
+    We scan UC tables in the configured schema and use get_synced_database_table
+    to check which are actual synced tables.
+    """
     try:
         w = WorkspaceClient()
-        project_id = _get_project_id()
-
-        branches = list(w.postgres.list_branches(parent=f"projects/{project_id}"))
+        schema = os.getenv("LAKEBASE_SCHEMA", "")
+        catalog = "main"
         all_synced = []
 
-        for branch in branches:
-            branch_id = branch.name.split("/")[-1] if branch.name else ""
-            try:
-                synced = list(w.database.list_synced_database_tables(
-                    parent=f"projects/{project_id}/branches/{branch_id}"
-                ))
-                for table in synced:
-                    info = {
-                        "name": table.name,
-                        "branch_id": branch_id,
-                        "table_id": table.name.split("/")[-1] if table.name else "",
-                    }
-                    if hasattr(table, "status") and table.status:
-                        info["state"] = str(getattr(table.status, "current_state", ""))
-                        info["pipeline_id"] = getattr(table.status, "pipeline_id", None)
-                    if hasattr(table, "spec") and table.spec:
-                        info["source_table"] = getattr(table.spec, "source_table_full_name", None)
-                        info["primary_key_columns"] = list(
-                            getattr(table.spec, "primary_key_columns", []) or []
-                        )
-                        policy = getattr(table.spec, "scheduling_policy", None)
-                        info["scheduling_policy"] = str(policy) if policy else None
-                    all_synced.append(info)
-            except Exception:
-                continue
+        if not schema:
+            return []
+
+        try:
+            uc_tables = list(w.tables.list(catalog_name=catalog, schema_name=schema))
+        except Exception as e:
+            logger.warning("UC tables.list failed for %s.%s: %s", catalog, schema, e)
+            return []
+
+        for tbl in uc_tables:
+            full_name = tbl.full_name if hasattr(tbl, "full_name") else f"{catalog}.{schema}.{tbl.name}"
+            synced = _try_get_synced_table(w, full_name)
+            if synced:
+                all_synced.append(_extract_synced_info(synced, full_name))
 
         return all_synced
+
     except HTTPException:
         raise
     except Exception as e:
         if "not found" in str(e).lower() or "UNIMPLEMENTED" in str(e):
             return []
         raise HTTPException(500, f"Failed to list synced tables: {e}")
+
+
+def _try_get_synced_table(w, full_name: str):
+    """Probe whether a UC table is a synced table. Returns the object or None."""
+    synced_name = f"synced_tables/{full_name}"
+    try:
+        if hasattr(w, "database") and hasattr(w.database, "get_synced_database_table"):
+            return w.database.get_synced_database_table(name=synced_name)
+    except Exception:
+        pass
+    try:
+        if hasattr(w, "postgres") and hasattr(w.postgres, "get_synced_table"):
+            return w.postgres.get_synced_table(name=synced_name)
+    except Exception:
+        pass
+    try:
+        resp = _try_rest(w, "GET", f"/api/2.0/database/synced-database-tables/{full_name}")
+        if resp and isinstance(resp, dict) and resp.get("name"):
+            return resp
+    except Exception:
+        pass
+    return None
+
+
+def _extract_synced_info(synced, full_name: str) -> dict:
+    """Extract a serializable dict from a synced table object (SDK or dict)."""
+    if isinstance(synced, dict):
+        status = synced.get("status", {})
+        spec = synced.get("spec", {})
+        return {
+            "name": synced.get("name", full_name),
+            "table_id": full_name.split(".")[-1] if full_name else "",
+            "branch_id": spec.get("branch", "").split("/")[-1] if spec.get("branch") else "production",
+            "state": status.get("detailed_state") or status.get("current_state", ""),
+            "pipeline_id": status.get("pipeline_id"),
+            "source_table": spec.get("source_table_full_name", full_name),
+            "primary_key_columns": spec.get("primary_key_columns", []),
+            "scheduling_policy": str(spec.get("scheduling_policy", "")) if spec.get("scheduling_policy") else None,
+            "message": status.get("message"),
+        }
+
+    status = _safe_attr(synced, "status")
+    spec = _safe_attr(synced, "spec")
+    branch_raw = _safe_attr(spec, "branch", "")
+    return {
+        "name": _safe_attr(synced, "name", full_name),
+        "table_id": full_name.split(".")[-1] if full_name else "",
+        "branch_id": branch_raw.split("/")[-1] if branch_raw else "production",
+        "state": str(_safe_attr(status, "detailed_state", "") or _safe_attr(status, "current_state", "")),
+        "pipeline_id": _safe_attr(status, "pipeline_id"),
+        "source_table": _safe_attr(spec, "source_table_full_name", full_name),
+        "primary_key_columns": list(_safe_attr(spec, "primary_key_columns", []) or []),
+        "scheduling_policy": str(_safe_attr(spec, "scheduling_policy")) if _safe_attr(spec, "scheduling_policy") else None,
+        "message": _safe_attr(status, "message"),
+    }
 
 
 @router.post("/synced-tables/{table_id}/trigger")
@@ -107,32 +216,51 @@ def trigger_synced_table(table_id: str, pipeline_id: str | None = None):
         raise HTTPException(500, f"Failed to trigger sync: {e}")
 
 
+# ── Feature Specs (UC Online Tables) ───────────────────────────────────────
+
 @router.get("/feature-specs")
 def list_feature_specs():
-    """List Unity Catalog online table specs (feature serving) if available."""
+    """List online table specs by scanning UC tables and probing for OT metadata.
+
+    The w.online_tables API has no list() method. We scan UC tables in the
+    configured schema and check each ending in '_online' via w.online_tables.get().
+    """
+    w = WorkspaceClient()
+    result = []
+    schema = os.getenv("LAKEBASE_SCHEMA", "")
+    catalog = "main"
+
+    if not schema:
+        return []
+
     try:
-        w = WorkspaceClient()
-        tables = list(w.online_tables.list())
-        result = []
-        for t in tables:
-            info = {
-                "name": t.name,
-            }
-            if hasattr(t, "status") and t.status:
-                info["state"] = str(getattr(t.status, "detailed_state", ""))
-                info["triggered_update_status"] = str(
-                    getattr(t.status, "triggered_update_status", "")
-                )
-            if hasattr(t, "spec") and t.spec:
-                info["source_table"] = getattr(t.spec, "source_table_full_name", None)
-                info["primary_key_columns"] = list(
-                    getattr(t.spec, "primary_key_columns", []) or []
-                )
-                info["run_triggered"] = getattr(t.spec, "run_triggered", None)
-                info["run_continuously"] = getattr(t.spec, "run_continuously", None)
-            result.append(info)
-        return result
+        uc_tables = list(w.tables.list(catalog_name=catalog, schema_name=schema))
     except Exception as e:
-        if "not found" in str(e).lower() or "UNIMPLEMENTED" in str(e):
-            return []
-        raise HTTPException(500, f"Failed to list feature specs: {e}")
+        logger.warning("UC table scan for online tables failed: %s", e)
+        return []
+
+    for tbl in uc_tables:
+        full_name = tbl.full_name if hasattr(tbl, "full_name") else f"{catalog}.{schema}.{tbl.name}"
+        if not full_name.endswith("_online"):
+            continue
+        try:
+            ot = w.online_tables.get(name=full_name)
+            if ot:
+                info = {
+                    "name": _safe_attr(ot, "name", full_name),
+                    "state": str(_safe_attr(_safe_attr(ot, "status"), "detailed_state", "")),
+                    "triggered_update_status": str(
+                        _safe_attr(_safe_attr(ot, "status"), "triggered_update_status", "")
+                    ),
+                    "source_table": _safe_attr(_safe_attr(ot, "spec"), "source_table_full_name"),
+                    "primary_key_columns": list(
+                        _safe_attr(_safe_attr(ot, "spec"), "primary_key_columns", []) or []
+                    ),
+                    "run_triggered": _safe_attr(_safe_attr(ot, "spec"), "run_triggered"),
+                    "run_continuously": _safe_attr(_safe_attr(ot, "spec"), "run_continuously"),
+                }
+                result.append(info)
+        except Exception:
+            pass
+
+    return result

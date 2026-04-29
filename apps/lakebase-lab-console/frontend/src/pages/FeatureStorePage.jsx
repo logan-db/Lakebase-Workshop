@@ -8,13 +8,15 @@ export default function FeatureStorePage() {
   const [featureSpecs, setFeatureSpecs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [mineOnly, setMineOnly] = useState(true)
 
-  const loadAll = async () => {
+  const loadAll = async (filterMine) => {
+    const showMine = filterMine !== undefined ? filterMine : mineOnly
     setLoading(true)
     setError(null)
     try {
       const [stores, features] = await Promise.allSettled([
-        api.listOnlineStores(),
+        api.listOnlineStores(showMine),
         api.listFeatureSpecs(),
       ])
       if (stores.status === 'fulfilled') setOnlineStores(stores.value)
@@ -26,6 +28,12 @@ export default function FeatureStorePage() {
   }
 
   useEffect(() => { loadAll() }, [])
+
+  const toggleMineOnly = () => {
+    const next = !mineOnly
+    setMineOnly(next)
+    loadAll(next)
+  }
 
   const stateColor = (state) => {
     if (!state) return 'badge-info'
@@ -43,8 +51,8 @@ export default function FeatureStorePage() {
           <div>
             <h2>Feature Store</h2>
             <p>
-              Real-time ML feature serving powered by Lakebase Autoscaling. Online stores provide
-              sub-millisecond feature lookups for recommendation engines, fraud detection, and personalization.
+              Real-time ML feature serving powered by your existing Lakebase project. Feature tables are
+              published directly into your Lakebase instance for sub-millisecond lookups.
             </p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={loadAll} disabled={loading}>
@@ -92,26 +100,32 @@ export default function FeatureStorePage() {
         <div className="card">
           <div className="card-header">
             <h3><Server size={16} /> Lakebase Online Stores</h3>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={mineOnly}
+                onChange={toggleMineOnly}
+                style={{ cursor: 'pointer' }}
+              />
+              Show only mine
+            </label>
           </div>
           {loading ? (
             <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
           ) : onlineStores.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Server size={36} /></div>
-              <p>No online stores found. Create one via the Online Feature Store lab notebook at <code style={{ color: 'var(--accent)' }}>labs/online-feature-store/</code>.</p>
+              <p>No online stores found. Run the Online Feature Store lab notebook at <code style={{ color: 'var(--accent)' }}>labs/online-feature-store/</code> to publish features to your existing Lakebase project.</p>
               <div className="code-block" style={{ marginTop: 16, textAlign: 'left', maxWidth: 600, margin: '16px auto' }}>{`from databricks.feature_engineering import FeatureEngineeringClient
 
 fe = FeatureEngineeringClient()
 
-# Provision a Lakebase Autoscaling instance for feature serving
-fe.create_online_store(
-    name="my-feature-store",
-    capacity="CU_1",
-)
+# Reuse your existing Lakebase project as the online store
+online_store = fe.get_online_store(name=PROJECT_ID)
 
 # Publish features from an offline table
 fe.publish_table(
-    online_store=fe.get_online_store("my-feature-store"),
+    online_store=online_store,
     source_table_name="catalog.schema.customer_features",
     online_table_name="catalog.schema.customer_features_online",
 )`}</div>
@@ -122,10 +136,18 @@ fe.publish_table(
                 <div key={i} style={{ padding: 18, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{s.store_id || s.name}</span>
-                    {s.state && <span className={`badge ${stateColor(s.state)}`}>{s.state}</span>}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {s.capacity && <span className="badge badge-purple" style={{ fontSize: 10 }}>{s.capacity}</span>}
+                      {s.state && <span className={`badge ${stateColor(s.state)}`}>{s.state}</span>}
+                    </div>
                   </div>
+                  {s.read_write_dns && (
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                      <Server size={12} style={{ verticalAlign: -2 }} /> <code style={{ color: 'var(--accent)', fontSize: 11 }}>{s.read_write_dns}</code>
+                    </div>
+                  )}
                   {s.source_table && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
                       <Database size={12} style={{ verticalAlign: -2 }} /> Source: <code style={{ color: 'var(--accent)' }}>{s.source_table}</code>
                     </div>
                   )}
@@ -134,8 +156,8 @@ fe.publish_table(
                       PK: {s.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
                     </div>
                   )}
-                  {s.detailed_state && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{s.detailed_state}</div>
+                  {s.creator && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Created by: {s.creator}</div>
                   )}
                 </div>
               ))}
@@ -220,7 +242,7 @@ fe.publish_table(
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div className="info-box info">
                 <span style={{ fontWeight: 600 }}>Online Store:</span>
-                <span>A dedicated Lakebase Autoscaling instance provisioned for feature serving. Each store has its own compute that scales independently.</span>
+                <span>Your existing Lakebase Autoscaling project, reused for feature serving. No separate instance needed — feature tables coexist with your workshop data.</span>
               </div>
               <div className="info-box info">
                 <span style={{ fontWeight: 600 }}>Feature Spec:</span>
@@ -232,7 +254,7 @@ fe.publish_table(
               </div>
               <div className="info-box info">
                 <span style={{ fontWeight: 600 }}>Direct Access:</span>
-                <span>Since online stores are Lakebase instances, you can query features directly with any PostgreSQL client for debugging and validation.</span>
+                <span>Since the online store is your Lakebase project, you can query features directly with the same PostgreSQL connection used in other labs.</span>
               </div>
             </div>
           </div>

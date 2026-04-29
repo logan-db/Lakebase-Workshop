@@ -71,11 +71,17 @@ export const api = {
   obsStatements: () => request('/api/observability/statements'),
 
   // Online Tables / Feature Store / Synced Tables
-  listOnlineStores: () => request('/api/online-tables/stores'),
+  listOnlineStores: (mineOnly = true) => request(`/api/online-tables/stores?mine_only=${mineOnly}`),
   listSyncedTables: () => request('/api/online-tables/synced-tables'),
   listFeatureSpecs: () => request('/api/online-tables/feature-specs'),
   triggerSync: (tableId, pipelineId) =>
     request(`/api/online-tables/synced-tables/${tableId}/trigger?pipeline_id=${encodeURIComponent(pipelineId)}`, { method: 'POST' }),
+
+  // Auth & Permissions
+  authCredential: () => request('/api/auth/credential'),
+  authRoles: () => request('/api/auth/roles'),
+  authGrants: () => request('/api/auth/grants'),
+  authConnectionInfo: () => request('/api/auth/connection-info'),
 
   // Generic (for API tester)
   raw: (method, path, body) =>
