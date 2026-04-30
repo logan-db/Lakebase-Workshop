@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { GitBranch, Plus, Trash2, AlertCircle, X, Shield, Clock, Check, RefreshCw } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function BranchManager() {
   const [branches, setBranches] = useState([])
@@ -53,13 +54,13 @@ export default function BranchManager() {
           Each branch gets its own compute endpoint and full PostgreSQL instance.
         </p>
       </div>
+      <LabBanner pageId="branches" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
-            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+          <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
               <X size={14} />
             </button>
           </div>
@@ -69,7 +70,7 @@ export default function BranchManager() {
       <div className="card">
         <div className="card-header">
           <h3><GitBranch size={16} /> Branches ({branches.length})</h3>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="btn-row">
             <button className="btn btn-secondary btn-sm btn-icon" onClick={load}>
               <RefreshCw size={14} />
             </button>
@@ -80,7 +81,7 @@ export default function BranchManager() {
         </div>
 
         {showCreate && (
-          <form onSubmit={handleCreate} style={{ marginBottom: 20, padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+          <form onSubmit={handleCreate} className="form-inset" style={{ marginBottom: 20 }}>
             <div className="form-row">
               <div className="form-group">
                 <label>Branch ID (must start with lab-)</label>
@@ -111,7 +112,7 @@ export default function BranchManager() {
                 max={720}
               />
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="btn-row">
               <button className="btn btn-primary" disabled={creating}>
                 <Check size={14} />
                 {creating ? 'Creating...' : 'Create Branch'}
@@ -124,7 +125,7 @@ export default function BranchManager() {
         )}
 
         {loading ? (
-          <div className="empty-state" style={{ padding: 20 }}><p>Loading branches...</p></div>
+          <div className="empty-state empty-state-compact"><p>Loading branches...</p></div>
         ) : branches.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon"><GitBranch size={36} /></div>
@@ -148,7 +149,7 @@ export default function BranchManager() {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <GitBranch size={14} style={{ color: 'var(--text-muted)' }} />
-                      <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{b.branch_id}</span>
+                      <span className="td-mono-bold">{b.branch_id}</span>
                     </div>
                   </td>
                   <td>
@@ -164,7 +165,7 @@ export default function BranchManager() {
                   </td>
                   <td>
                     {b.expire_time && b.expire_time !== 'None' ? (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span className="td-mono-sm" style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Clock size={12} /> {b.expire_time}
                       </span>
                     ) : (

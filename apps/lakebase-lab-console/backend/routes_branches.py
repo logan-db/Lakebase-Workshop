@@ -1,11 +1,12 @@
 """Branch management API routes."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
 
 from .db import get_project_id
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/branches", tags=["branches"])
 
@@ -32,10 +33,10 @@ class BranchInfo(BaseModel):
 
 
 @router.get("", response_model=list[BranchInfo])
-def list_branches():
+def list_branches(user: UserContext = Depends(get_current_user)):
     """List all branches in the project."""
     w = _get_client()
-    project_id = get_project_id()
+    project_id = get_project_id(user)
     branches = list(w.postgres.list_branches(parent=f"projects/{project_id}"))
 
     result = []
@@ -54,10 +55,10 @@ def list_branches():
 
 
 @router.get("/{branch_id}", response_model=BranchInfo)
-def get_branch(branch_id: str):
+def get_branch(branch_id: str, user: UserContext = Depends(get_current_user)):
     """Get details of a specific branch."""
     w = _get_client()
-    project_id = get_project_id()
+    project_id = get_project_id(user)
     b = w.postgres.get_branch(name=f"projects/{project_id}/branches/{branch_id}")
     bid = b.name.split("/")[-1]
     return BranchInfo(
@@ -72,10 +73,10 @@ def get_branch(branch_id: str):
 
 
 @router.post("", response_model=BranchInfo)
-def create_branch(req: CreateBranchRequest):
+def create_branch(req: CreateBranchRequest, user: UserContext = Depends(get_current_user)):
     """Create a new branch (prefixed with 'lab-')."""
     w = _get_client()
-    project_id = get_project_id()
+    project_id = get_project_id(user)
     source = f"projects/{project_id}/branches/{req.source_branch}"
 
     ttl_seconds = req.ttl_hours * 3600
@@ -104,13 +105,13 @@ def create_branch(req: CreateBranchRequest):
 
 
 @router.delete("/{branch_id}")
-def delete_branch(branch_id: str):
+def delete_branch(branch_id: str, user: UserContext = Depends(get_current_user)):
     """Delete a branch. Only lab- prefixed branches can be deleted via the UI."""
     if not branch_id.startswith("lab-"):
         raise HTTPException(400, "Only lab- prefixed branches can be deleted from the console")
 
     w = _get_client()
-    project_id = get_project_id()
+    project_id = get_project_id(user)
 
     try:
         w.postgres.delete_branch(

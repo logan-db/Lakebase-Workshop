@@ -12,31 +12,53 @@ import random
 import time
 import uuid
 from collections import deque
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .db import get_pooled_connection, get_pool, get_db_metrics
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/loadtest", tags=["loadtest"])
 
 _active_tests: dict[str, dict] = {}
 
-_READ_QUERIES = [
+_READ_QUERIES_LIGHT = [
+    (
+        "SELECT event_id, event_type, source, created_at "
+        "FROM events ORDER BY event_id DESC LIMIT 50",
+        "recent_events",
+    ),
+    (
+        "SELECT event_type, count(*) AS cnt "
+        "FROM events GROUP BY event_type ORDER BY cnt DESC",
+        "count_by_type",
+    ),
+    (
+        "SELECT count(*) AS total, "
+        "min(created_at) AS earliest, max(created_at) AS latest "
+        "FROM events",
+        "basic_stats",
+    ),
+    (
+        "SELECT source, count(*) AS cnt "
+        "FROM events GROUP BY source ORDER BY cnt DESC LIMIT 20",
+        "count_by_source",
+    ),
+    (
+        "SELECT date_trunc('minute', created_at) AS minute, count(*) AS cnt "
+        "FROM events GROUP BY 1 ORDER BY 1 DESC LIMIT 60",
+        "time_series_light",
+    ),
+]
+
+_READ_QUERIES_HEAVY = [
     (
         "SELECT event_type, count(*) AS cnt, "
         "avg(length(payload::text)) AS avg_size, "
         "sum(length(payload::text)) AS total_payload_bytes "
         "FROM events GROUP BY event_type ORDER BY cnt DESC",
         "agg_by_type",
-    ),
-    (
-        "SELECT count(*) AS total, "
-        "avg(length(payload::text)) AS avg_payload, "
-        "sum(length(payload::text)) AS total_bytes, "
-        "min(created_at) AS earliest, max(created_at) AS latest "
-        "FROM events",
-        "full_stats",
     ),
     (
         "SELECT source, event_type, count(*) AS cnt, "
@@ -115,13 +137,18 @@ class LoadTestStatus(BaseModel):
     db_cache_hit_ratio: float = 0
 
 
-def _run_read_query(branch_id: str | None, query_idx: int):
-    """Run a CPU/memory-heavy query that pushes utilization."""
-    sql, _ = _READ_QUERIES[query_idx % len(_READ_QUERIES)]
-    start = time.monotonic()
+def _run_read_query(user: UserContext, branch_id: str | None, query_idx: int):
+    """Run a mix of light and heavy queries to simulate realistic traffic."""
+    use_heavy = (query_idx % 10) < 3
+    if use_heavy:
+        sql, _ = _READ_QUERIES_HEAVY[query_idx % len(_READ_QUERIES_HEAVY)]
+    else:
+        sql, _ = _READ_QUERIES_LIGHT[query_idx % len(_READ_QUERIES_LIGHT)]
     rows_scanned = 0
+    start = time.monotonic()
     try:
-        with get_pooled_connection(branch_id) as conn:
+        with get_pooled_connection(user, branch_id) as conn:
+            start = time.monotonic()
             with conn.cursor() as cur:
                 cur.execute(sql)
                 results = cur.fetchall()
@@ -129,16 +156,17 @@ def _run_read_query(branch_id: str | None, query_idx: int):
                     first = results[0]
                     rows_scanned = first.get("total", 0) or first.get("cnt", 0) or first.get("rows_hashed", 0) or len(results)
                     rows_scanned = max(rows_scanned, len(results))
-        return (time.monotonic() - start) * 1000, None, rows_scanned
+            return (time.monotonic() - start) * 1000, None, rows_scanned
     except Exception as e:
         return (time.monotonic() - start) * 1000, str(e), 0
 
 
-def _run_write_query(branch_id: str | None, batch_size: int):
+def _run_write_query(user: UserContext, branch_id: str | None, batch_size: int):
     """Batch insert with ~500-byte JSONB payloads to push I/O and working set."""
     start = time.monotonic()
     try:
-        with get_pooled_connection(branch_id) as conn:
+        with get_pooled_connection(user, branch_id) as conn:
+            start = time.monotonic()
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO events (event_type, source, payload) "
@@ -164,29 +192,29 @@ def _run_write_query(branch_id: str | None, batch_size: int):
                 )
                 rows = cur.rowcount
                 conn.commit()
-        return (time.monotonic() - start) * 1000, None, rows
+            return (time.monotonic() - start) * 1000, None, rows
     except Exception as e:
         return (time.monotonic() - start) * 1000, str(e), 0
 
 
-async def _worker(test_id: str, is_write: bool, branch_id: str | None):
+async def _worker(test_id: str, is_write: bool, user: UserContext, branch_id: str | None):
     """Single async worker that fires heavy queries using pooled connections."""
     state = _active_tests.get(test_id)
     if not state:
         return
     loop = asyncio.get_event_loop()
-    query_counter = random.randint(0, len(_READ_QUERIES) - 1)
+    query_counter = random.randint(0, len(_READ_QUERIES_HEAVY) + len(_READ_QUERIES_LIGHT) - 1)
     batch_size = state.get("write_batch_size", 500)
 
     while state["running"]:
         if is_write:
             latency, error, rows = await loop.run_in_executor(
-                None, _run_write_query, branch_id, batch_size
+                None, _run_write_query, user, branch_id, batch_size
             )
             state["rows_written"] += rows
         else:
             latency, error, rows_scanned = await loop.run_in_executor(
-                None, _run_read_query, branch_id, query_counter
+                None, _run_read_query, user, branch_id, query_counter
             )
             query_counter += 1
             state["rows_read"] += rows_scanned
@@ -208,16 +236,16 @@ async def _worker(test_id: str, is_write: bool, branch_id: str | None):
         await asyncio.sleep(0)
 
 
-async def _orchestrator(test_id: str, req: LoadTestRequest):
+async def _orchestrator(test_id: str, req: LoadTestRequest, user: UserContext):
     """Manage the load test lifecycle."""
     state = _active_tests[test_id]
 
-    get_pool(req.branch_id, min_size=4, max_size=min(req.concurrency + 5, 60))
+    get_pool(user, req.branch_id, min_size=4, max_size=min(req.concurrency + 5, 60))
 
     tasks = []
     for i in range(req.concurrency):
         is_write = (i / req.concurrency) < req.write_ratio
-        tasks.append(asyncio.create_task(_worker(test_id, is_write, req.branch_id)))
+        tasks.append(asyncio.create_task(_worker(test_id, is_write, user, req.branch_id)))
 
     await asyncio.sleep(req.duration_seconds)
     state["running"] = False
@@ -266,7 +294,7 @@ def _build_status(test_id: str, state: dict) -> LoadTestStatus:
 
 
 @router.post("/start", response_model=LoadTestStatus)
-async def start_load_test(req: LoadTestRequest):
+async def start_load_test(req: LoadTestRequest, user: UserContext = Depends(get_current_user)):
     """Start a new load test."""
     if any(s["running"] for s in _active_tests.values()):
         raise HTTPException(409, "A load test is already running")
@@ -292,9 +320,10 @@ async def start_load_test(req: LoadTestRequest):
         "lookup_ids": [],
         "_db_metrics_cache": {},
         "branch_id": req.branch_id,
+        "user": user,
     }
 
-    asyncio.create_task(_orchestrator(test_id, req))
+    asyncio.create_task(_orchestrator(test_id, req, user))
 
     return LoadTestStatus(
         test_id=test_id,
@@ -321,13 +350,27 @@ def stop_load_test(test_id: str):
     return {"status": "stopped", "test_id": test_id}
 
 
+@router.get("/active", response_model=LoadTestStatus)
+def get_active_load_test():
+    """Return the currently running load test, if any."""
+    for tid, state in _active_tests.items():
+        if state["running"]:
+            user = state.get("user")
+            if user:
+                state["_db_metrics_cache"] = get_db_metrics(user, state.get("branch_id"))
+            return _build_status(tid, state)
+    raise HTTPException(404, "No active load test")
+
+
 @router.get("/status/{test_id}", response_model=LoadTestStatus)
 def get_load_test_status(test_id: str):
     """Get current status of a load test."""
     state = _active_tests.get(test_id)
     if not state:
         raise HTTPException(404, "Test not found")
-    state["_db_metrics_cache"] = get_db_metrics(state.get("branch_id"))
+    user = state.get("user")
+    if user:
+        state["_db_metrics_cache"] = get_db_metrics(user, state.get("branch_id"))
     return _build_status(test_id, state)
 
 

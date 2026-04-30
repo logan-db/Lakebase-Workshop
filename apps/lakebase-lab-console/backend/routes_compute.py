@@ -1,13 +1,18 @@
 """Compute / autoscaling management routes."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
 
 from .db import get_db_metrics, get_project_id
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/compute", tags=["compute"])
+
+
+def _get_client() -> WorkspaceClient:
+    return WorkspaceClient()
 
 
 class EndpointInfo(BaseModel):
@@ -30,17 +35,17 @@ class UpdateComputeRequest(BaseModel):
 
 
 @router.get("/{branch_id}", response_model=list[EndpointInfo])
-def list_endpoints(branch_id: str):
+def list_endpoints(branch_id: str, user: UserContext = Depends(get_current_user)):
     """List compute endpoints for a branch, enriched with live DB metrics."""
-    w = WorkspaceClient()
-    pid = get_project_id()
+    w = _get_client()
+    pid = get_project_id(user)
     endpoints = list(
         w.postgres.list_endpoints(
             parent=f"projects/{pid}/branches/{branch_id}"
         )
     )
 
-    db_metrics = get_db_metrics(branch_id)
+    db_metrics = get_db_metrics(user, branch_id)
 
     result = []
     for ep in endpoints:
@@ -62,7 +67,7 @@ def list_endpoints(branch_id: str):
 
 
 @router.patch("/{branch_id}/{endpoint_id}", response_model=EndpointInfo)
-def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest):
+def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest, user: UserContext = Depends(get_current_user)):
     """Update autoscaling limits for a compute endpoint."""
     if req.max_cu - req.min_cu > 16:
         raise HTTPException(
@@ -71,8 +76,8 @@ def update_compute(branch_id: str, endpoint_id: str, req: UpdateComputeRequest):
             f"(max spread is 16 CU)"
         )
 
-    w = WorkspaceClient()
-    pid = get_project_id()
+    w = _get_client()
+    pid = get_project_id(user)
     ep_name = f"projects/{pid}/branches/{branch_id}/endpoints/{endpoint_id}"
 
     try:

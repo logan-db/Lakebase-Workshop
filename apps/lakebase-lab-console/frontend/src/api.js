@@ -13,7 +13,8 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  // Health & config
+  // Identity & config
+  whoami: () => request('/api/whoami'),
   health: () => request('/api/health'),
   config: () => request('/api/config'),
   dbtest: () => request('/api/dbtest'),
@@ -33,6 +34,7 @@ export const api = {
   startLoadTest: (data) => request('/api/loadtest/start', { method: 'POST', body: JSON.stringify(data) }),
   stopLoadTest: (id) => request(`/api/loadtest/stop/${id}`, { method: 'POST' }),
   loadTestStatus: (id) => request(`/api/loadtest/status/${id}`),
+  activeLoadTest: () => request('/api/loadtest/active'),
 
   // Data
   listProducts: (cat) => request(`/api/data/products${cat ? `?category=${cat}` : ''}`),

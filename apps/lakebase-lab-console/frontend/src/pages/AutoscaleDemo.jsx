@@ -5,6 +5,7 @@ import {
   Play, Square, Settings, Clock, AlertCircle, RefreshCw, X, Trash2,
   Database, Cpu, ArrowUpRight, Boxes
 } from '../icons'
+import LabBanner from '../LabBanner'
 
 function cleanState(raw) {
   if (!raw) return 'unknown'
@@ -56,6 +57,15 @@ export default function AutoscaleDemo() {
   }, [])
 
   useEffect(() => { loadCompute() }, [loadCompute])
+
+  useEffect(() => {
+    api.activeLoadTest()
+      .then((s) => {
+        setTestId(s.test_id)
+        setMetrics(s)
+      })
+      .catch(() => {})
+  }, [])
 
   const startTest = async (preset) => {
     const config = preset || form
@@ -142,16 +152,15 @@ export default function AutoscaleDemo() {
           The autoscaler adjusts CU allocation based on workload demand.
         </p>
       </div>
+      <LabBanner pageId="autoscale" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
-            <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
-              <X size={14} /> Dismiss
-            </button>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
+            <X size={14} /> Dismiss
+          </button>
         </div>
       )}
 
@@ -166,7 +175,7 @@ export default function AutoscaleDemo() {
             {isRunning && <span className="badge badge-accent" style={{ animation: 'pulse 2s infinite' }}>MONITORING</span>}
           </div>
         </div>
-        <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 8 }}>
+        <div className="metrics-row metrics-row-4" style={{ marginBottom: 8 }}>
           <div className="metric-card">
             <div className="metric-value">{ep.min_cu ?? '--'}</div>
             <div className="metric-label">Min CU</div>
@@ -229,7 +238,7 @@ export default function AutoscaleDemo() {
                   <span className={`spike-preset-icon ${p.colorClass}`}><p.Icon size={22} /></span>
                   <span className="spike-preset-label">{p.label}</span>
                   <span className="spike-preset-desc">{p.desc}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  <span className="spike-preset-desc">
                     {p.concurrency} workers &middot; {Math.round(p.write_ratio * 100)}% writes
                   </span>
                 </button>
@@ -247,7 +256,7 @@ export default function AutoscaleDemo() {
             </div>
 
             {showCustom && (
-              <div style={{ marginTop: 14, padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <div className="form-inset" style={{ marginTop: 14 }}>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Concurrent Workers</label>
@@ -293,20 +302,20 @@ export default function AutoscaleDemo() {
 
         {/* Active test config summary */}
         {isRunning && metrics && (
-          <div style={{ marginTop: 12, padding: 14, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', display: 'flex', gap: 24, fontSize: 13, flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{metrics.concurrency}</strong> workers
+          <div className="running-config">
+            <span className="text-muted">
+              <strong>{metrics.concurrency}</strong> workers
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{metrics.write_batch_size || 100}</strong> rows/insert
+            <span className="text-muted">
+              <strong>{metrics.write_batch_size || 100}</strong> rows/insert
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
+            <span className="text-muted">
               <strong style={{ color: 'var(--accent)' }}>{Math.round((metrics.write_ratio || 0) * 100)}%</strong> writes
               {' / '}
               <strong style={{ color: 'var(--blue)' }}>{Math.round((1 - (metrics.write_ratio || 0)) * 100)}%</strong> reads
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              Elapsed: <strong style={{ color: 'var(--text-primary)' }}>{metrics.elapsed_seconds}s</strong>
+            <span className="text-muted">
+              Elapsed: <strong>{metrics.elapsed_seconds}s</strong>
             </span>
           </div>
         )}
@@ -316,7 +325,7 @@ export default function AutoscaleDemo() {
       {metrics && (
         <>
           {/* Row throughput */}
-          <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="metrics-row metrics-row-4">
             <div className="metric-card">
               <div className="metric-value" style={{ color: 'var(--accent)' }}>
                 {fmtRows(metrics.rows_written || 0)}
@@ -342,7 +351,7 @@ export default function AutoscaleDemo() {
           </div>
 
           {/* Latency + health */}
-          <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="metrics-row metrics-row-4">
             <div className="metric-card">
               <div className="metric-value">{metrics.avg_latency_ms}</div>
               <div className="metric-label">Avg Latency (ms)</div>
@@ -379,7 +388,7 @@ export default function AutoscaleDemo() {
                   <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Full-Table Scans</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Aggregations, GROUP BY, and range scans on <code style={{ color: 'var(--blue)' }}>events</code> that force sequential scans and push CPU
+                  70% lightweight lookups and counts, 30% heavy full-table scans (aggregations, window functions, random sorts) on <code style={{ color: 'var(--blue)' }}>events</code> to push CPU
                 </p>
                 <div className="rw-stats">
                   <div>
@@ -437,7 +446,7 @@ export default function AutoscaleDemo() {
           </div>
 
           {/* QPS + Latency Charts */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div className="grid-2col">
             <div className="card">
               <div className="card-header">
                 <h3><Activity size={16} /> Throughput (QPS)</h3>
@@ -449,7 +458,7 @@ export default function AutoscaleDemo() {
               </div>
               <div className="chart-area" style={{ minHeight: 160 }}>
                 {history.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 16 }}><p>Waiting for data...</p></div>
+                  <div className="empty-state empty-state-compact"><p>Waiting for data...</p></div>
                 ) : (
                   history.map((h, i) => (
                     <div className="chart-bar-row" key={i} style={{ marginBottom: Math.max(1, 4 - Math.floor(history.length / 20)) }}>
@@ -472,7 +481,7 @@ export default function AutoscaleDemo() {
               </div>
               <div className="chart-area" style={{ minHeight: 160 }}>
                 {history.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 16 }}><p>Waiting for data...</p></div>
+                  <div className="empty-state empty-state-compact"><p>Waiting for data...</p></div>
                 ) : (
                   history.map((h, i) => (
                     <div className="chart-bar-row" key={i} style={{ marginBottom: Math.max(1, 4 - Math.floor(history.length / 20)) }}>
@@ -503,7 +512,7 @@ export default function AutoscaleDemo() {
               </div>
 
               {/* DB metrics summary */}
-              <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+              <div className="metrics-row metrics-row-4" style={{ marginBottom: 16 }}>
                 <div className="metric-card">
                   <div className="metric-value" style={{ color: 'var(--accent)' }}>
                     {computeHistory[computeHistory.length - 1].connections}
@@ -534,7 +543,7 @@ export default function AutoscaleDemo() {
 
               {/* Connections chart */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   Active DB Connections Over Time
                 </div>
                 <div className="compute-timeline">
@@ -561,7 +570,7 @@ export default function AutoscaleDemo() {
 
               {/* Transactions/sec chart */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   Transactions per Interval (3s)
                 </div>
                 <div className="compute-timeline">
@@ -587,7 +596,7 @@ export default function AutoscaleDemo() {
 
               {/* State change log */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   State Changes
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -614,7 +623,7 @@ export default function AutoscaleDemo() {
           })()}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div className="btn-row" style={{ marginBottom: 16 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => api.clearLoadtestEvents()}>
               <Trash2 size={14} /> Clear Test Events
             </button>
@@ -652,8 +661,8 @@ export default function AutoscaleDemo() {
                   <Database size={18} />
                 </div>
                 <div className="explainer-text">
-                  <h4>Heavy Reads (CPU-Intensive)</h4>
-                  <p>Reads cycle through random sorts, md5 hashing, window functions, percentiles, and JSONB ops that hammer CPU and memory on every row in <code>events</code>.</p>
+                  <h4>Mixed Reads (Realistic + CPU-Intensive)</h4>
+                  <p>Most reads are lightweight (recent rows, counts). 30% are heavy full-table scans with random sorts, md5 hashing, window functions, and JSONB ops that push CPU high enough to trigger autoscaling.</p>
                 </div>
               </div>
               <div className="explainer-item">

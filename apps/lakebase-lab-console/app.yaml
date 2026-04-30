@@ -9,10 +9,8 @@ command:
   - "8000"
 
 env:
-  - name: LAKEBASE_PROJECT_ID
-    value: "lakebase-lab-logan-rupert"
   - name: LAKEBASE_BRANCH_ID
-    value: "production"
+    value: production
 
 resources:
   - name: lakebase-db

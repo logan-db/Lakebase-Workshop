@@ -44,6 +44,7 @@ from databricks.feature_engineering import FeatureEngineeringClient
 
 fe = FeatureEngineeringClient()
 print(f"✓ Feature Engineering client initialized")
+show_app_link("feature-store", "Feature Store")
 
 # COMMAND ----------
 

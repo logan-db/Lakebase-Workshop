@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Key, Database, RefreshCw, AlertCircle, Shield, Server, ChevronRight } from '../icons'
+import LabBanner from '../LabBanner'
 
 function CollapsibleSection({ title, icon, badge, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -87,13 +88,12 @@ export default function AuthPage() {
           </button>
         </div>
       </div>
+      <LabBanner pageId="auth" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
-            <p style={{ color: 'var(--danger)' }}>{error}</p>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
         </div>
       )}
 
@@ -125,7 +125,7 @@ export default function AuthPage() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-2col">
         {/* Connection Info */}
         <div className="card">
           <div className="card-header">
@@ -135,19 +135,19 @@ export default function AuthPage() {
             <div style={{ fontSize: 13 }}>
               <div className="detail-row">
                 <span className="detail-label">Host</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{connInfo.host}</span>
+                <span className="detail-value detail-value-mono" style={{ fontSize: 11 }}>{connInfo.host}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Port</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)' }}>{connInfo.port}</span>
+                <span className="detail-value detail-value-mono">{connInfo.port}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Database</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)' }}>{connInfo.database}</span>
+                <span className="detail-value detail-value-mono">{connInfo.database}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Username</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{connInfo.username}</span>
+                <span className="detail-value detail-value-mono" style={{ fontSize: 11 }}>{connInfo.username}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">SSL Mode</span>
@@ -159,7 +159,7 @@ export default function AuthPage() {
               </div>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+            <div className="empty-state empty-state-compact"><p>Loading...</p></div>
           )}
         </div>
 
@@ -181,7 +181,7 @@ export default function AuthPage() {
             <div style={{ fontSize: 13 }}>
               <div className="detail-row">
                 <span className="detail-label">Token Preview</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, wordBreak: 'break-all' }}>{credential.token_preview}</span>
+                <span className="detail-value td-mono" style={{ fontSize: 10, wordBreak: 'break-all' }}>{credential.token_preview}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Length</span>
@@ -216,8 +216,8 @@ export default function AuthPage() {
             <tbody>
               {Object.entries(credential.jwt_claims).map(([k, v]) => (
                 <tr key={k}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{k}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, wordBreak: 'break-all' }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
+                  <td className="td-mono-bold">{k}</td>
+                  <td className="td-mono-xs" style={{ wordBreak: 'break-all' }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
                 </tr>
               ))}
             </tbody>
@@ -243,7 +243,7 @@ export default function AuthPage() {
         defaultOpen={false}
       >
         {roles.length === 0 ? (
-          <div className="empty-state" style={{ padding: 20 }}>
+          <div className="empty-state empty-state-compact">
             <p>{loading ? 'Loading roles...' : 'No roles found or not connected'}</p>
           </div>
         ) : (
@@ -254,7 +254,7 @@ export default function AuthPage() {
             <tbody>
               {roles.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 12 }}>{r.rolname}</td>
+                  <td className="td-mono-bold" style={{ fontSize: 12 }}>{r.rolname}</td>
                   <td>{r.rolsuper ? <span className="badge badge-danger">Yes</span> : <span style={{ color: 'var(--text-muted)' }}>No</span>}</td>
                   <td>{r.rolcanlogin ? <span className="badge badge-success">Yes</span> : <span style={{ color: 'var(--text-muted)' }}>No</span>}</td>
                   <td>{r.rolcreatedb ? <span className="badge badge-info">Yes</span> : <span style={{ color: 'var(--text-muted)' }}>No</span>}</td>
@@ -274,7 +274,7 @@ export default function AuthPage() {
         defaultOpen={false}
       >
         {grants.length === 0 ? (
-          <div className="empty-state" style={{ padding: 20 }}>
+          <div className="empty-state empty-state-compact">
             <p>{loading ? 'Loading grants...' : 'No explicit grants found (you\'re the owner, so you have implicit access)'}</p>
           </div>
         ) : (
@@ -285,8 +285,8 @@ export default function AuthPage() {
             <tbody>
               {grants.map((g, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{g.table_name}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{g.grantee}</td>
+                  <td className="td-mono-bold">{g.table_name}</td>
+                  <td className="td-mono-xs">{g.grantee}</td>
                   <td><span className="badge badge-teal">{g.privilege_type}</span></td>
                 </tr>
               ))}
@@ -296,7 +296,7 @@ export default function AuthPage() {
       </CollapsibleSection>
 
       {/* Grant Examples + External Tools */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="grid-2col">
         <CollapsibleSection title="Grant Examples" icon={null} defaultOpen={false}>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
             Run these via the SQL Playground or psql to grant access:

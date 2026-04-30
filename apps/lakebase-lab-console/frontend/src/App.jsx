@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { api } from './api'
 import {
   LayoutDashboard, TrendingUp, GitBranch, Cpu,
@@ -19,6 +19,9 @@ import FeatureStorePage from './pages/FeatureStorePage'
 import AuthPage from './pages/AuthPage'
 import BackupRecoveryPage from './pages/BackupRecoveryPage'
 
+export const AppContext = createContext(null)
+export const useAppContext = () => useContext(AppContext)
+
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'overview' },
   { id: 'autoscale', label: 'Autoscale Demo', Icon: TrendingUp, section: 'overview' },
@@ -34,6 +37,8 @@ const NAV_ITEMS = [
   { id: 'api', label: 'API Tester', Icon: Terminal, section: 'tools' },
 ]
 
+const VALID_PAGES = new Set(NAV_ITEMS.map(i => i.id))
+
 const SECTIONS = [
   { key: 'overview', label: 'Overview' },
   { key: 'labs', label: 'Labs' },
@@ -47,10 +52,22 @@ function getInitialTheme() {
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
+function formatUserDisplay(email) {
+  if (!email) return ''
+  const local = email.split('@')[0]
+  return local.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function getInitialPage() {
+  const hash = window.location.hash.slice(1)
+  return VALID_PAGES.has(hash) ? hash : 'dashboard'
+}
+
 export default function App() {
-  const [activePage, setActivePage] = useState('dashboard')
+  const [activePage, setActivePage] = useState(getInitialPage)
   const [dbStatus, setDbStatus] = useState(null)
   const [config, setConfig] = useState(null)
+  const [userInfo, setUserInfo] = useState(null)
   const [theme, setTheme] = useState(getInitialTheme)
 
   useEffect(() => {
@@ -61,6 +78,21 @@ export default function App() {
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   useEffect(() => {
+    window.location.hash = activePage === 'dashboard' ? '' : activePage
+  }, [activePage])
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.slice(1)
+      if (VALID_PAGES.has(hash)) setActivePage(hash)
+      else if (!hash) setActivePage('dashboard')
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  useEffect(() => {
+    api.whoami().then(setUserInfo).catch(() => {})
     api.dbtest().then(setDbStatus).catch(() => setDbStatus({ db_connected: false }))
     api.config().then(setConfig).catch(() => {})
   }, [])
@@ -84,7 +116,10 @@ export default function App() {
     }
   }
 
+  const appCtx = { config, userInfo, onNavigate: setActivePage }
+
   return (
+    <AppContext.Provider value={appCtx}>
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
@@ -94,7 +129,16 @@ export default function App() {
             </div>
             <h1>Lakebase Lab</h1>
           </div>
-          {config?.project_id && <p>{config.project_id}</p>}
+          {userInfo?.email && (
+            <p title={userInfo.email} style={{ fontSize: 12, opacity: 0.8 }}>
+              {formatUserDisplay(userInfo.email)}
+            </p>
+          )}
+          {(userInfo?.project_id || config?.project_id) && (
+            <p className="td-mono-xs" style={{ opacity: 0.6 }}>
+              {userInfo?.project_id || config?.project_id}
+            </p>
+          )}
         </div>
         <ul className="sidebar-nav">
           {SECTIONS.map((section) => {
@@ -147,5 +191,6 @@ export default function App() {
         {renderPage()}
       </main>
     </div>
+    </AppContext.Provider>
   )
 }

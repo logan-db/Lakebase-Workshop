@@ -247,85 +247,68 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 6: Attach Database to Lab Console App
-# MAGIC Adds the Lakebase database as a resource on the Lab Console app so the app
-# MAGIC can connect automatically via injected `PGHOST`/`PGUSER` environment variables.
+# MAGIC ## Step 6: Grant the Lab Console App Access
+# MAGIC
+# MAGIC The shared Lab Console app uses a **Service Principal** (SP) to connect to
+# MAGIC every participant's Lakebase project. This step creates a PostgreSQL role
+# MAGIC for the SP and grants it access to your schema.
+# MAGIC
+# MAGIC This is required because:
+# MAGIC - The app's SP credentials have the `postgres` OAuth scope (forwarded user tokens do not)
+# MAGIC - Each user must explicitly grant the SP access to their project/schema
+# MAGIC - The SP connects as itself, but routes queries to your schema based on your email
 
 # COMMAND ----------
 
-import json
-
-app_name = PROJECT_ID  # app uses the same naming convention
-
-branch_name = f"projects/{PROJECT_ID}/branches/production"
-
+app_name = "lakebase-lab-console"
 try:
-    db_resp = w.api_client.do(
-        "GET",
-        f"/api/2.0/postgres/{branch_name}/databases",
-    )
-    databases = db_resp.get("databases", [])
-    db_resource = next(
-        (d for d in databases if d.get("status", {}).get("postgres_database") == "databricks_postgres"),
-        None,
-    )
-    if not db_resource:
-        raise ValueError("databricks_postgres database not found on production branch")
-
-    db_name = db_resource["name"]
-
-    w.api_client.do(
-        "PATCH",
-        f"/api/2.0/apps/{app_name}",
-        body={
-            "resources": [
-                {
-                    "name": "lakebase-db",
-                    "postgres": {
-                        "branch": branch_name,
-                        "database": db_name,
-                        "permission": "CAN_CONNECT_AND_CREATE",
-                    },
-                }
-            ]
-        },
-    )
-    print(f"✓ Attached Lakebase database to app '{app_name}'")
-    print(f"  Branch:   {branch_name}")
-    print(f"  Database: {db_name}")
-
-    # Grant the app's service principal access to the user's schema
-    app_info = w.api_client.do("GET", f"/api/2.0/apps/{app_name}")
-    sp_client_id = app_info.get("service_principal_client_id", "")
-    if sp_client_id:
-        cred2 = w.postgres.generate_database_credential(endpoint=endpoint.name)
-        grant_params = {**params, "password": cred2.token}
-        grant_conn = psycopg.connect(**grant_params)
-        grant_conn.autocommit = True
-        with grant_conn.cursor() as gcur:
-            gcur.execute(f'GRANT USAGE, CREATE ON SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
-            gcur.execute(f'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
-            gcur.execute(f'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_client_id}"')
-            gcur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_client_id}"')
-            gcur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_client_id}"')
-        grant_conn.close()
-        print(f"✓ Granted schema access to app service principal")
-    else:
-        print(f"⚠ Could not determine app service principal — grant permissions manually")
-
+    app_info = w.apps.get(name=app_name)
+    sp_id = getattr(app_info, 'effective_service_principal_client_id', None) or app_info.service_principal_client_id
+    print(f"App: {app_name}")
+    print(f"SP Client ID: {sp_id}")
 except Exception as e:
-    print(f"⚠ Could not attach database to app: {e}")
-    print(f"  If you deployed without the app, this is expected.")
-    print(f"  To deploy the app later, run from the repo root:")
-    print(f"    databricks bundle run lakebase_lab_console --target dev")
-    print(f"  Then re-run this cell to attach the database.")
+    print(f"⚠ Could not look up app '{app_name}': {e}")
+    print("  If the app hasn't been deployed yet, you can run this step later")
+    print("  from the App Deployment lab (labs/app-deployment/).")
+    sp_id = None
+
+# COMMAND ----------
+
+if sp_id:
+    cred = w.postgres.generate_database_credential(endpoint=endpoint.name)
+    params["password"] = cred.token
+    grant_conn = psycopg.connect(**params)
+
+    with grant_conn.cursor() as cur:
+        try:
+            cur.execute(f"SELECT databricks_create_role('{sp_id}', 'service_principal')")
+            print(f"✓ Created OAuth role for SP: {sp_id}")
+        except Exception as e:
+            if 'already exists' in str(e):
+                grant_conn.rollback()
+                print(f"✓ OAuth role already exists for SP: {sp_id}")
+            else:
+                raise
+
+        cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_id}"')
+        print(f"✓ Granted SP access to schema: {PG_SCHEMA}")
+
+    grant_conn.commit()
+    grant_conn.close()
+else:
+    print("Skipping SP grants (app not found). Run this step later from the App Deployment lab.")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## ✓ Setup Complete!
 # MAGIC
-# MAGIC Your Lakebase project is ready. Here's your configuration:
+# MAGIC Your Lakebase project is ready. The shared **Lab Console** app will
+# MAGIC automatically connect to your project when you log in.
+# MAGIC
+# MAGIC The SP grant above allows the app to query your data on your behalf.
 
 # COMMAND ----------
 
@@ -338,10 +321,13 @@ print(f"  Host:          {endpoint.status.hosts.host}")
 print(f"  Database:      databricks_postgres")
 print(f"  Schema:        {PG_SCHEMA}")
 print(f"  Username:      {user_email}")
+if sp_id:
+    print(f"  App SP:        {sp_id} (granted)")
 print("=" * 60)
 print()
-print("  The Lab Console app auto-discovers the project ID and schema")
-print("  from the attached database resource. No manual config needed.")
+print("  Open the Lab Console app (Compute → Apps → lakebase-lab-console)")
+print("  to explore your data. The app routes each user to their own")
+print("  Lakebase project automatically.")
 
 # COMMAND ----------
 

@@ -1,15 +1,17 @@
 """Observability routes: PostgreSQL monitoring and diagnostics."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
 from .db import execute_query
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/observability", tags=["observability"])
 
 
 @router.get("/database")
-def database_stats():
+def database_stats(user: UserContext = Depends(get_current_user)):
     """pg_stat_database metrics for the current database."""
-    rows = execute_query("""
+    rows = execute_query(user, """
         SELECT
             datname,
             numbackends AS active_connections,
@@ -36,9 +38,9 @@ def database_stats():
 
 
 @router.get("/tables")
-def table_stats():
+def table_stats(user: UserContext = Depends(get_current_user)):
     """pg_stat_user_tables: sequential/index scans, live/dead tuples, last vacuum/analyze."""
-    return execute_query("""
+    return execute_query(user, """
         SELECT
             schemaname,
             relname AS table_name,
@@ -61,9 +63,9 @@ def table_stats():
 
 
 @router.get("/indexes")
-def index_stats():
+def index_stats(user: UserContext = Depends(get_current_user)):
     """pg_stat_user_indexes: index usage and sizes."""
-    return execute_query("""
+    return execute_query(user, """
         SELECT
             schemaname,
             relname AS table_name,
@@ -77,9 +79,9 @@ def index_stats():
 
 
 @router.get("/sizes")
-def table_sizes():
+def table_sizes(user: UserContext = Depends(get_current_user)):
     """Table and index sizes."""
-    return execute_query("""
+    return execute_query(user, """
         SELECT
             tablename AS table_name,
             pg_size_pretty(pg_total_relation_size(quote_ident(tablename))) AS total_size,
@@ -93,9 +95,9 @@ def table_sizes():
 
 
 @router.get("/connections")
-def connection_info():
+def connection_info(user: UserContext = Depends(get_current_user)):
     """Active connections and limits."""
-    conns = execute_query("""
+    conns = execute_query(user, """
         SELECT
             count(*) AS total_connections,
             count(*) FILTER (WHERE state = 'active') AS active,
@@ -104,16 +106,16 @@ def connection_info():
         FROM pg_stat_activity
         WHERE datname = current_database()
     """)
-    max_conn = execute_query("SHOW max_connections")
+    max_conn = execute_query(user, "SHOW max_connections")
     result = conns[0] if conns else {}
     result["max_connections"] = int(max_conn[0].get("max_connections", 0)) if max_conn else 0
     return result
 
 
 @router.get("/activity")
-def recent_activity():
+def recent_activity(user: UserContext = Depends(get_current_user)):
     """Current active queries from pg_stat_activity."""
-    return execute_query("""
+    return execute_query(user, """
         SELECT
             pid,
             usename AS username,
@@ -132,15 +134,15 @@ def recent_activity():
 
 
 @router.get("/statements")
-def slow_statements():
+def slow_statements(user: UserContext = Depends(get_current_user)):
     """Top queries by total time from pg_stat_statements (if available)."""
     try:
-        execute_query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+        execute_query(user, "CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
     except Exception:
         pass
 
     try:
-        return execute_query("""
+        return execute_query(user, """
             SELECT
                 queryid,
                 left(query, 200) AS query_preview,

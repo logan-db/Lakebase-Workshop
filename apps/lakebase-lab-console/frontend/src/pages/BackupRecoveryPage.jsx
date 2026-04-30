@@ -4,6 +4,7 @@ import {
   Shield, GitBranch, Database, RefreshCw, AlertCircle,
   Clock, Plus, ChevronRight, Activity
 } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function BackupRecoveryPage() {
   const [branches, setBranches] = useState([])
@@ -66,13 +67,12 @@ export default function BackupRecoveryPage() {
           </button>
         </div>
       </div>
+      <LabBanner pageId="backup" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
-            <p style={{ color: 'var(--danger)' }}>{error}</p>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
         </div>
       )}
 
@@ -114,7 +114,7 @@ export default function BackupRecoveryPage() {
         </table>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-2col">
         {/* Create Snapshot */}
         <div className="card">
           <div className="card-header">
@@ -137,7 +137,7 @@ export default function BackupRecoveryPage() {
                 onChange={(e) => setSnapshotName(e.target.value)}
                 placeholder="snapshot-pre-migration"
               />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              <div className="setup-hint">
                 Prefixed with "lab-" automatically if not present
               </div>
             </div>
@@ -146,7 +146,8 @@ export default function BackupRecoveryPage() {
               <select
                 value={sourceBranch}
                 onChange={(e) => setSourceBranch(e.target.value)}
-                style={{ width: '100%', padding: '8px 10px', background: 'var(--bg-inset)', border: '1px solid var(--border-light)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13 }}
+                className="form-select"
+                style={{ width: '100%' }}
               >
                 {branches.length > 0 ? (
                   branches.map((b) => (
@@ -170,24 +171,24 @@ export default function BackupRecoveryPage() {
             <span className="badge badge-info">{branches.length} branches</span>
           </div>
           {loading ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+            <div className="empty-state empty-state-compact"><p>Loading...</p></div>
           ) : branches.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No branches found</p></div>
+            <div className="empty-state empty-state-compact"><p>No branches found</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {branches.map((b, i) => (
-                <div key={i} style={{
-                  padding: '10px 14px', borderRadius: 8,
+                <div key={i} className="list-item-card" style={{
+                  padding: '10px 14px',
                   background: 'var(--bg-secondary)', border: '1px solid var(--border)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}>
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 13 }}>{b.branch_id}</div>
+                    <div className="td-mono-bold" style={{ fontSize: 13 }}>{b.branch_id}</div>
                     {b.source_branch && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>from: {b.source_branch}</div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div className="btn-row">
                     {b.ttl ? (
                       <span className="badge badge-warning" style={{ fontSize: 10 }}>TTL: {Math.round(b.ttl / 3600)}h</span>
                     ) : (

@@ -16,8 +16,8 @@ sync:
 resources:
   apps:
     lakebase_lab_console:
-      name: lakebase-lab-logan-rupert
-      description: "Lakebase Lab Console — Interactive workshop app"
+      name: lakebase-lab-console
+      description: "Lakebase Lab Console — Shared workshop app with per-user routing"
       source_code_path: ./apps/lakebase-lab-console
 
 targets:

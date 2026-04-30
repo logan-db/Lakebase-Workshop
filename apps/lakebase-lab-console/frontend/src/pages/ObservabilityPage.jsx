@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Activity, Database, Server, RefreshCw, Table, Cpu, Clock, AlertCircle } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function ObservabilityPage() {
   const [tab, setTab] = useState('overview')
@@ -67,19 +68,18 @@ export default function ObservabilityPage() {
           </button>
         </div>
       </div>
+      <LabBanner pageId="observability" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
-            <p style={{ color: 'var(--danger)' }}>{error}</p>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
         </div>
       )}
 
       {/* Database Overview Metrics */}
       {dbStats && (
-        <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="metrics-row metrics-row-4">
           <div className="metric-card">
             <div className="metric-icon"><Server size={18} /></div>
             <div className="metric-value" style={{ color: 'var(--accent)' }}>{dbStats.cache_hit_ratio}%</div>
@@ -128,28 +128,28 @@ export default function ObservabilityPage() {
 
       {/* ── Database Stats ── */}
       {tab === 'overview' && dbStats && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="grid-2col">
           <div className="card">
             <div className="card-header">
               <h3><Database size={16} /> Read/Write Activity</h3>
             </div>
-            <div className="detail-row"><span className="detail-label">Rows Returned</span><span className="detail-value">{fmtNum(dbStats.rows_returned)}</span></div>
-            <div className="detail-row"><span className="detail-label">Rows Fetched</span><span className="detail-value">{fmtNum(dbStats.rows_fetched)}</span></div>
-            <div className="detail-row"><span className="detail-label">Rows Inserted</span><span className="detail-value">{fmtNum(dbStats.rows_inserted)}</span></div>
-            <div className="detail-row"><span className="detail-label">Rows Updated</span><span className="detail-value">{fmtNum(dbStats.rows_updated)}</span></div>
-            <div className="detail-row"><span className="detail-label">Rows Deleted</span><span className="detail-value">{fmtNum(dbStats.rows_deleted)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rows Returned</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.rows_returned)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rows Fetched</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.rows_fetched)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rows Inserted</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.rows_inserted)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rows Updated</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.rows_updated)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rows Deleted</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.rows_deleted)}</span></div>
           </div>
 
           <div className="card">
             <div className="card-header">
               <h3><Server size={16} /> Cache & Transactions</h3>
             </div>
-            <div className="detail-row"><span className="detail-label">Cache Hits</span><span className="detail-value">{fmtNum(dbStats.cache_hits)}</span></div>
-            <div className="detail-row"><span className="detail-label">Disk Reads</span><span className="detail-value">{fmtNum(dbStats.disk_reads)}</span></div>
-            <div className="detail-row"><span className="detail-label">Cache Hit Ratio</span><span className="detail-value" style={{ color: 'var(--accent)' }}>{dbStats.cache_hit_ratio}%</span></div>
-            <div className="detail-row"><span className="detail-label">Commits</span><span className="detail-value">{fmtNum(dbStats.commits)}</span></div>
-            <div className="detail-row"><span className="detail-label">Rollbacks</span><span className="detail-value" style={{ color: (dbStats.rollbacks || 0) > 0 ? 'var(--warning)' : 'inherit' }}>{fmtNum(dbStats.rollbacks)}</span></div>
-            <div className="detail-row"><span className="detail-label">Temp Files</span><span className="detail-value">{fmtNum(dbStats.temp_files)}</span></div>
+            <div className="detail-row"><span className="detail-label">Cache Hits</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.cache_hits)}</span></div>
+            <div className="detail-row"><span className="detail-label">Disk Reads</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.disk_reads)}</span></div>
+            <div className="detail-row"><span className="detail-label">Cache Hit Ratio</span><span className="detail-value detail-value-mono" style={{ color: 'var(--accent)' }}>{dbStats.cache_hit_ratio}%</span></div>
+            <div className="detail-row"><span className="detail-label">Commits</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.commits)}</span></div>
+            <div className="detail-row"><span className="detail-label">Rollbacks</span><span className="detail-value detail-value-mono" style={{ color: (dbStats.rollbacks || 0) > 0 ? 'var(--warning)' : 'inherit' }}>{fmtNum(dbStats.rollbacks)}</span></div>
+            <div className="detail-row"><span className="detail-label">Temp Files</span><span className="detail-value detail-value-mono">{fmtNum(dbStats.temp_files)}</span></div>
           </div>
 
           {connections && (
@@ -157,7 +157,7 @@ export default function ObservabilityPage() {
               <div className="card-header">
                 <h3><Cpu size={16} /> Connection Pool</h3>
               </div>
-              <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+              <div className="metrics-row metrics-row-5">
                 <div className="metric-card">
                   <div className="metric-value">{connections.total_connections}</div>
                   <div className="metric-label">Total</div>
@@ -180,9 +180,9 @@ export default function ObservabilityPage() {
                 </div>
               </div>
               <div style={{ marginTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                <div className="cu-gauge-labels" style={{ marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                   <span>Connection Utilization</span>
-                  <span>{connections.total_connections} / {connections.max_connections}</span>
+                  <span className="td-mono">{connections.total_connections} / {connections.max_connections}</span>
                 </div>
                 <div className="cu-gauge">
                   <div className="cu-gauge-fill" style={{ width: `${connections.max_connections > 0 ? (connections.total_connections / connections.max_connections) * 100 : 0}%` }} />
@@ -201,7 +201,7 @@ export default function ObservabilityPage() {
             <span className="badge badge-info">{tables.length} tables</span>
           </div>
           {tables.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No table stats available</p></div>
+            <div className="empty-state empty-state-compact"><p>No table stats available</p></div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="data-table">
@@ -216,15 +216,15 @@ export default function ObservabilityPage() {
                 <tbody>
                   {tables.map((t, i) => (
                     <tr key={i}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{t.table_name}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.seq_scan)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.idx_scan)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.live_rows)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: (t.dead_rows || 0) > 100 ? 'var(--warning)' : 'inherit' }}>{fmtNum(t.dead_rows)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.inserts)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.updates)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(t.deletes)}</td>
-                      <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.last_autovacuum || t.last_vacuum || '--'}</td>
+                      <td className="td-mono-bold">{t.table_name}</td>
+                      <td className="td-mono">{fmtNum(t.seq_scan)}</td>
+                      <td className="td-mono">{fmtNum(t.idx_scan)}</td>
+                      <td className="td-mono">{fmtNum(t.live_rows)}</td>
+                      <td className="td-mono" style={{ color: (t.dead_rows || 0) > 100 ? 'var(--warning)' : 'inherit' }}>{fmtNum(t.dead_rows)}</td>
+                      <td className="td-mono">{fmtNum(t.inserts)}</td>
+                      <td className="td-mono">{fmtNum(t.updates)}</td>
+                      <td className="td-mono">{fmtNum(t.deletes)}</td>
+                      <td className="td-mono-xs" style={{ color: 'var(--text-muted)' }}>{t.last_autovacuum || t.last_vacuum || '--'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -242,7 +242,7 @@ export default function ObservabilityPage() {
             <span className="badge badge-info">{indexes.length} indexes</span>
           </div>
           {indexes.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No index stats available</p></div>
+            <div className="empty-state empty-state-compact"><p>No index stats available</p></div>
           ) : (
             <table className="data-table">
               <thead>
@@ -251,13 +251,13 @@ export default function ObservabilityPage() {
               <tbody>
                 {indexes.map((idx, i) => (
                   <tr key={i}>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{idx.table_name}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{idx.index_name}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>
+                    <td className="td-mono">{idx.table_name}</td>
+                    <td className="td-mono-bold">{idx.index_name}</td>
+                    <td className="td-mono">
                       <span className={`badge ${(idx.scans || 0) > 0 ? 'badge-success' : 'badge-warning'}`}>{fmtNum(idx.scans)}</span>
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(idx.tuples_read)}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(idx.tuples_fetched)}</td>
+                    <td className="td-mono">{fmtNum(idx.tuples_read)}</td>
+                    <td className="td-mono">{fmtNum(idx.tuples_fetched)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -273,7 +273,7 @@ export default function ObservabilityPage() {
             <h3><Server size={16} /> Storage Sizes</h3>
           </div>
           {sizes.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No size data available</p></div>
+            <div className="empty-state empty-state-compact"><p>No size data available</p></div>
           ) : (
             <>
               <table className="data-table">
@@ -283,17 +283,17 @@ export default function ObservabilityPage() {
                 <tbody>
                   {sizes.map((s, i) => (
                     <tr key={i}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{s.table_name}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{s.total_size}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{s.table_size}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{s.index_size}</td>
+                      <td className="td-mono-bold">{s.table_name}</td>
+                      <td className="td-mono" style={{ color: 'var(--accent)' }}>{s.total_size}</td>
+                      <td className="td-mono">{s.table_size}</td>
+                      <td className="td-mono">{s.index_size}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {sizes.length > 0 && (
                 <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                  <div className="section-subheader">
                     Relative Table Sizes
                   </div>
                   {(() => {
@@ -323,11 +323,11 @@ export default function ObservabilityPage() {
             <button className="btn btn-secondary btn-sm btn-icon" onClick={loadActivity}><RefreshCw size={14} /></button>
           </div>
           {activity.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No active queries at this moment</p></div>
+            <div className="empty-state empty-state-compact"><p>No active queries at this moment</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {activity.map((a, i) => (
-                <div key={i} style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                <div key={i} className="list-item-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span className="badge badge-info">PID {a.pid}</span>
@@ -372,14 +372,14 @@ export default function ObservabilityPage() {
                 <tbody>
                   {statements.map((s, i) => (
                     <tr key={i}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.query_preview}>
+                      <td className="td-mono-xs" style={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.query_preview}>
                         {s.query_preview}
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(s.calls)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{fmtNum(s.total_time_ms)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{s.avg_time_ms}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: (s.max_time_ms || 0) > 1000 ? 'var(--warning)' : 'inherit' }}>{s.max_time_ms}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{fmtNum(s.rows)}</td>
+                      <td className="td-mono">{fmtNum(s.calls)}</td>
+                      <td className="td-mono" style={{ color: 'var(--accent)' }}>{fmtNum(s.total_time_ms)}</td>
+                      <td className="td-mono">{s.avg_time_ms}</td>
+                      <td className="td-mono" style={{ color: (s.max_time_ms || 0) > 1000 ? 'var(--warning)' : 'inherit' }}>{s.max_time_ms}</td>
+                      <td className="td-mono">{fmtNum(s.rows)}</td>
                     </tr>
                   ))}
                 </tbody>

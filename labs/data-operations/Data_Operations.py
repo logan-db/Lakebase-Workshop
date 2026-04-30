@@ -44,6 +44,7 @@ dbutils.library.restartPython()
 
 conn = get_connection()
 print(f"✓ Connected to {PROJECT_ID} / production")
+show_app_link("data", "Data Ops")
 
 # COMMAND ----------
 

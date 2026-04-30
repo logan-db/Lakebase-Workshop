@@ -1,27 +1,25 @@
 """Online Tables / Feature Store routes via Databricks SDK + REST API."""
 
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from databricks.sdk import WorkspaceClient
 
-from .db import get_project_id, get_schema
+from .db import get_schema
+from .user_context import UserContext, get_current_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/online-tables", tags=["online-tables"])
 
 
-def _get_user_identifier() -> str:
-    """Derive a user identifier from the schema name for filtering.
+def _get_client() -> WorkspaceClient:
+    return WorkspaceClient()
 
-    Schema like 'lakebase_lab_logan_rupert' -> 'logan_rupert'
-    which maps to creator patterns like 'logan.rupert@...'
-    """
-    schema = get_schema()
-    prefix = "lakebase_lab_"
-    if schema.startswith(prefix):
-        return schema[len(prefix):]
-    return schema
+
+def _get_user_identifier(user: UserContext) -> str:
+    """Extract user identifier for filtering online stores."""
+    local_part = user.email.split("@")[0]
+    return local_part.replace(".", "_").replace("-", "_").lower()
 
 
 def _safe_attr(obj, attr, default=None):
@@ -40,11 +38,11 @@ def _try_rest(w, method, path, body=None):
 # ── Online Stores (Database Instances) ──────────────────────────────────────
 
 @router.get("/stores")
-def list_online_stores(mine_only: bool = Query(True)):
+def list_online_stores(mine_only: bool = Query(True), user: UserContext = Depends(get_current_user)):
     """List database instances, optionally filtered to the current user."""
     result = []
-    w = WorkspaceClient()
-    user_id = _get_user_identifier()
+    w = _get_client()
+    user_id = _get_user_identifier(user)
 
     try:
         if hasattr(w, "database") and hasattr(w.database, "list_database_instances"):
@@ -102,7 +100,7 @@ def _matches_user(store: dict, user_normalized: str, user_id: str) -> bool:
 # ── Synced Tables (Reverse ETL) ────────────────────────────────────────────
 
 @router.get("/synced-tables")
-def list_synced_tables():
+def list_synced_tables(user: UserContext = Depends(get_current_user)):
     """List synced tables by scanning UC tables and probing each for sync metadata.
 
     The SDK's list_synced_database_tables is officially unimplemented.
@@ -110,8 +108,8 @@ def list_synced_tables():
     to check which are actual synced tables.
     """
     try:
-        w = WorkspaceClient()
-        schema = get_schema()
+        w = _get_client()
+        schema = get_schema(user)
         catalog = "main"
         all_synced = []
 
@@ -193,10 +191,10 @@ def _extract_synced_info(synced, full_name: str) -> dict:
 
 
 @router.post("/synced-tables/{table_id}/trigger")
-def trigger_synced_table(table_id: str, pipeline_id: str | None = None):
+def trigger_synced_table(table_id: str, pipeline_id: str | None = None, user: UserContext = Depends(get_current_user)):
     """Trigger a sync pipeline update for a synced table."""
     try:
-        w = WorkspaceClient()
+        w = _get_client()
         if not pipeline_id:
             raise HTTPException(400, "pipeline_id is required to trigger a sync")
         w.pipelines.start_update(pipeline_id=pipeline_id)
@@ -210,15 +208,15 @@ def trigger_synced_table(table_id: str, pipeline_id: str | None = None):
 # ── Feature Specs (UC Online Tables) ───────────────────────────────────────
 
 @router.get("/feature-specs")
-def list_feature_specs():
+def list_feature_specs(user: UserContext = Depends(get_current_user)):
     """List online table specs by scanning UC tables and probing for OT metadata.
 
     The w.online_tables API has no list() method. We scan UC tables in the
     configured schema and check each ending in '_online' via w.online_tables.get().
     """
-    w = WorkspaceClient()
+    w = _get_client()
     result = []
-    schema = get_schema()
+    schema = get_schema(user)
     catalog = "main"
 
     try:

@@ -4,6 +4,7 @@ import {
   RefreshCw, Database, ExternalLink, ChevronRight,
   Clock, Activity, AlertCircle, Play, Table, Layers
 } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function SyncStatus({ config }) {
   const [syncedTables, setSyncedTables] = useState([])
@@ -64,13 +65,12 @@ export default function SyncStatus({ config }) {
           </button>
         </div>
       </div>
+      <LabBanner pageId="sync" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
-            <p style={{ color: 'var(--danger)' }}>{error}</p>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
         </div>
       )}
 
@@ -118,10 +118,10 @@ w.postgres.create_synced_table(
               </div>
             )}
             {syncedTables.map((t, i) => (
-              <div key={i} style={{ padding: 18, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+              <div key={i} className="list-item-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{t.table_id || t.name}</span>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span className="td-mono-bold" style={{ fontSize: 14 }}>{t.table_id || t.name}</span>
+                  <div className="btn-row">
                     {t.state && <span className={`badge ${stateColor(t.state)}`}>{t.state}</span>}
                     <span className="badge badge-info">{t.branch_id}</span>
                     {t.pipeline_id && (
@@ -138,17 +138,17 @@ w.postgres.create_synced_table(
                   </div>
                 </div>
                 {t.source_table && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  <div className="td-mono-sm" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <Database size={12} /> Source: <code style={{ color: 'var(--accent)' }}>{t.source_table}</code>
                   </div>
                 )}
                 {t.primary_key_columns && t.primary_key_columns.length > 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  <div className="td-mono-sm" style={{ color: 'var(--text-muted)' }}>
                     PK: {t.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
                   </div>
                 )}
                 {t.scheduling_policy && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  <div className="td-mono-sm" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
                     Schedule: <span className="badge badge-purple" style={{ fontSize: 10 }}>{t.scheduling_policy}</span>
                   </div>
                 )}

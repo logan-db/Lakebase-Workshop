@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Cpu, Edit3, Check, X, AlertCircle, Server, Zap, RefreshCw } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function ComputePage() {
   const [branches, setBranches] = useState([])
@@ -55,27 +56,26 @@ export default function ComputePage() {
           based on workload demand. Scale-to-zero suspends compute after inactivity.
         </p>
       </div>
+      <LabBanner pageId="compute" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
-            <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
-              <X size={14} />
-            </button>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
+            <X size={14} />
+          </button>
         </div>
       )}
 
       <div className="card">
         <div className="card-header">
           <h3><Server size={16} /> Compute Endpoints</h3>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="btn-row">
             <select
+              className="form-select"
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              style={{ padding: '6px 12px', background: 'var(--bg-inset)', border: '1px solid var(--border-light)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font)' }}
             >
               {branches.map((b) => (
                 <option key={b.branch_id} value={b.branch_id}>{b.branch_id}</option>
@@ -88,7 +88,7 @@ export default function ComputePage() {
         </div>
 
         {loading ? (
-          <div className="empty-state" style={{ padding: 20 }}><p>Loading endpoints...</p></div>
+          <div className="empty-state empty-state-compact"><p>Loading endpoints...</p></div>
         ) : endpoints.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon"><Cpu size={36} /></div>
@@ -96,10 +96,10 @@ export default function ComputePage() {
           </div>
         ) : (
           endpoints.map((ep) => (
-            <div key={ep.name} style={{ padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', marginBottom: 12, border: '1px solid var(--border)' }}>
+            <div key={ep.name} className="list-item-card" style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{ep.name.split('/').pop()}</span>
+                <div className="btn-row">
+                  <span className="td-mono-bold" style={{ fontSize: 14 }}>{ep.name.split('/').pop()}</span>
                   <span className={`badge ${ep.state?.includes('ACTIVE') ? 'badge-success' : 'badge-warning'}`}>
                     {ep.state || 'unknown'}
                   </span>
@@ -142,7 +142,7 @@ export default function ComputePage() {
               )}
 
               {ep.host && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 10 }}>
+                <div className="td-mono-sm" style={{ color: 'var(--text-muted)', marginTop: 10 }}>
                   Host: {ep.host}
                 </div>
               )}
@@ -175,7 +175,7 @@ export default function ComputePage() {
                   value={editForm.min_cu}
                   onChange={(e) => setEditForm({ ...editForm, min_cu: parseFloat(e.target.value) })}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                <div className="slider-labels">
                   <span>0</span><span>8</span><span>16</span><span>24</span><span>32</span>
                 </div>
               </div>
@@ -189,7 +189,7 @@ export default function ComputePage() {
                   value={editForm.max_cu}
                   onChange={(e) => setEditForm({ ...editForm, max_cu: parseFloat(e.target.value) })}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                <div className="slider-labels">
                   <span>0.5</span><span>8</span><span>16</span><span>24</span><span>32</span>
                 </div>
               </div>
@@ -197,9 +197,9 @@ export default function ComputePage() {
 
             {/* Visual preview */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              <div className="cu-gauge-labels" style={{ marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                 <span>Preview</span>
-                <span>{editForm.min_cu}-{editForm.max_cu} CU &middot; {(editForm.min_cu * 2).toFixed(0)}-{(editForm.max_cu * 2).toFixed(0)} GB RAM</span>
+                <span className="td-mono">{editForm.min_cu}-{editForm.max_cu} CU &middot; {(editForm.min_cu * 2).toFixed(0)}-{(editForm.max_cu * 2).toFixed(0)} GB RAM</span>
               </div>
               <div className="cu-gauge">
                 <div className="cu-gauge-fill" style={{ width: `${((editForm.max_cu || 0) / 32) * 100}%`, marginLeft: `${((editForm.min_cu || 0) / 32) * 100}%` }} />
@@ -217,7 +217,7 @@ export default function ComputePage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="btn-row">
               <button className="btn btn-primary" disabled={updating || spread > 8}>
                 <Check size={14} />
                 {updating ? 'Updating...' : 'Apply Changes'}

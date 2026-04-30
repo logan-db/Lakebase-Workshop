@@ -3,16 +3,20 @@ Lakebase Lab Console -- FastAPI application entry point.
 
 Serves the React frontend as static files and exposes API routes
 for branch management, compute, load testing, CRUD, and agent memory.
+
+In shared-app mode, each logged-in user is routed to their own Lakebase
+project based on their Databricks identity (forwarded by the Apps proxy).
 """
 
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.user_context import UserContext, get_current_user
 from backend.routes_branches import router as branches_router
 from backend.routes_compute import router as compute_router
 from backend.routes_loadtest import router as loadtest_router
@@ -25,7 +29,7 @@ from backend.routes_auth import router as auth_router
 app = FastAPI(
     title="Lakebase Lab Console",
     description="Interactive workshop app for exploring Databricks Lakebase Autoscaling",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -48,59 +52,70 @@ app.include_router(auth_router)
 STATIC_DIR = Path(__file__).parent / "frontend" / "dist"
 
 
+@app.get("/api/whoami")
+def whoami(user: UserContext = Depends(get_current_user)):
+    """Return the logged-in user's identity and derived Lakebase context."""
+    return {
+        "email": user.email,
+        "project_id": user.project_id,
+        "schema": user.schema,
+        "branch_id": user.branch_id,
+        "is_local": user._is_local,
+    }
+
+
 @app.get("/api/health")
-def health():
-    from backend.db import get_project_id, get_schema
-    try:
-        project_id = get_project_id()
-    except RuntimeError:
-        project_id = "NOT SET (auto-discovery pending)"
-    pghost = os.getenv("PGHOST", "NOT SET")
-    try:
-        schema = get_schema()
-    except RuntimeError:
-        schema = "NOT SET"
+def health(user: UserContext = Depends(get_current_user)):
     return {
         "status": "ok",
-        "project_id": project_id,
-        "pghost": pghost,
-        "schema": schema,
+        "project_id": user.project_id,
+        "schema": user.schema,
+        "user": user.email,
         "frontend_built": STATIC_DIR.exists(),
     }
 
 
 @app.get("/api/config")
-def get_config():
-    from backend.db import get_project_id, get_schema
+def get_config(user: UserContext = Depends(get_current_user)):
     host = os.getenv("DATABRICKS_HOST", "")
     if host and not host.startswith("https://"):
         host = f"https://{host}"
-    try:
-        project_id = get_project_id()
-    except RuntimeError:
-        project_id = ""
-    try:
-        schema = get_schema()
-    except RuntimeError:
-        schema = ""
+    bundle_target = os.getenv("BUNDLE_TARGET", "dev")
+    notebook_base_url = ""
+    if host and user.email:
+        notebook_base_url = (
+            f"{host}/#workspace/Users/{user.email}"
+            f"/.bundle/lakebase-workshop/{bundle_target}/files"
+        )
+    app_name = os.getenv("DATABRICKS_APP_NAME", "lakebase-lab-console")
+    app_url = f"{host}/apps/{app_name}" if host else ""
     return {
-        "project_id": project_id,
-        "branch_id": os.getenv("LAKEBASE_BRANCH_ID", "production"),
-        "database": os.getenv("PGDATABASE", "databricks_postgres"),
-        "schema": schema,
+        "project_id": user.project_id,
+        "branch_id": user.branch_id,
+        "database": "databricks_postgres",
+        "schema": user.schema,
         "pghost_set": bool(os.getenv("PGHOST")),
         "workspace_host": host,
+        "user_email": user.email,
+        "notebook_base_url": notebook_base_url,
+        "app_url": app_url,
     }
 
 
 @app.get("/api/dbtest")
-def db_test():
+def db_test(user: UserContext = Depends(get_current_user)):
     try:
         from backend.db import execute_query
-        result = execute_query("SELECT version() as version, current_database() as db")
+        result = execute_query(user, "SELECT version() as version, current_database() as db")
         return {"db_connected": True, "info": result[0]}
     except Exception as e:
-        return {"db_connected": False, "error": str(e)}
+        error_msg = str(e)
+        is_no_project = "No endpoints" in error_msg or "setup notebook" in error_msg.lower()
+        return {
+            "db_connected": False,
+            "error": error_msg,
+            "needs_setup": is_no_project,
+        }
 
 
 # Serve the pre-built React SPA from frontend/dist/.

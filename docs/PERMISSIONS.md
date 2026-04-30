@@ -1,112 +1,87 @@
 # Permissions Guide
 
-## Two Permission Layers
+## Shared App Architecture
+
+The Lab Console runs as a **single shared Databricks App** (`lakebase-lab-console`).
+When a user opens the app, it reads their email from the Databricks Apps proxy headers
+and routes them to their own Lakebase project. All SDK calls and database connections
+are performed by the app's **Service Principal** (SP).
+
+## Two-Step Permission Model
+
+The app requires two things to work:
+
+### 1. SP gets the `postgres` OAuth scope (facilitator — once)
+
+The app declares a `postgres` resource in `app.yaml`. After deployment, the facilitator
+attaches their Lakebase project to this resource (done automatically by `setup.sh`).
+This gives the SP the `postgres` OAuth scope, which is required for Lakebase SDK calls
+like `list_endpoints` and `generate_database_credential`.
+
+### 2. Each user grants the SP access to their project (per-user — once)
+
+Each participant runs Step 6 in `00_Setup_Lakebase_Project` (or the equivalent cells
+in the App Deployment lab). This:
+
+1. Looks up the app's SP client_id
+2. Creates a PostgreSQL OAuth role for the SP: `SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal')`
+3. Grants schema access: `GRANT ALL ON SCHEMA ... TO "<SP_CLIENT_ID>"`
+
+## What Each User Needs
+
+| Requirement | Details |
+|-------------|---------|
+| **Workspace access** | User must be able to access the Databricks workspace and the app |
+| **Lakebase project** | User must have run `00_Setup_Lakebase_Project` to create their project |
+| **SP grant** | User must have completed Step 6 in setup (or the App Deployment lab) |
+
+## How Authentication Works
+
+### Request Flow
+
+1. User opens the Lab Console app in their browser
+2. Databricks Apps proxy authenticates the user via workspace SSO
+3. Proxy injects `X-Forwarded-Email` into every request
+4. The FastAPI backend reads this header and:
+   - Derives the project ID from the email: `lakebase-lab-<sanitized-username>`
+   - Derives the schema: `lakebase_lab_<sanitized_username>`
+   - Uses the app's SP (`WorkspaceClient()`) to call Lakebase SDK
+   - Generates a database credential via `w.postgres.generate_database_credential()`
+   - Connects to PostgreSQL using the SP's client_id as username
+
+### Two Permission Layers
 
 Lakebase has two independent permission layers:
 
-1. **Workspace permissions** -- who can manage the Lakebase project (create/delete branches, resize compute)
-2. **Database permissions** -- who can read/write PostgreSQL tables
+1. **Workspace permissions** — the SP needs access to each user's Lakebase project.
+   Since projects are governed by Unity Catalog, the SP is granted access when
+   each user runs the setup notebook.
+2. **Database permissions** — the SP needs a PostgreSQL role with schema grants.
+   This is handled by `databricks_create_role` + `GRANT` in the setup notebook.
 
-## Databricks Apps: Service Principal Grants
+### Why Not User Token Passthrough?
 
-When you deploy a Databricks App and add a Lakebase database as a resource, the App runs as a **Service Principal (SP)**. You must create an OAuth-enabled Postgres role for the SP and grant it access to your schemas and tables.
+The Databricks Apps proxy forwards a user token (`x-forwarded-access-token`), but
+this token **does not include the `postgres` OAuth scope**. Without this scope,
+Lakebase SDK calls fail. The SP approach works because the postgres resource
+declaration in `app.yaml` gives the SP the required scope.
 
-See the [official tutorial](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling) for the full walkthrough.
+### Local Development Fallback
 
-### Finding the Service Principal ID
+When running the app locally (outside the Databricks Apps runtime), the forwarded
+headers are not available. In this case, the app falls back to:
 
-**From a notebook or script** (recommended):
-
-```python
-app = w.apps.get(name="lakebase-lab-console")
-sp = w.service_principals.get(id=app.service_principal_id)
-print(sp.application_id)  # This is the SP client ID
-```
-
-**From the UI:** Go to **Compute → Apps → your-app → Environment tab** and find the `DATABRICKS_CLIENT_ID` value.
-
-### Step 1: Create the OAuth Role
-
-The `databricks_auth` extension enables OAuth authentication so the SP can connect using Databricks-managed tokens. Connect to your Lakebase database as the project owner (your user) and run:
-
-```sql
--- Enable the Databricks authentication extension
-CREATE EXTENSION IF NOT EXISTS databricks_auth;
-
--- Create an OAuth-enabled Postgres role for the SP
--- Replace <SP_CLIENT_ID> with the actual DATABRICKS_CLIENT_ID
-SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');
-```
-
-### Step 2: Grant Schema Access
-
-```sql
--- Replace <SP_CLIENT_ID> with the actual Service Principal client ID
-
--- Grant schema access
--- Replace <your_schema> with the PG_SCHEMA from notebook 00 output
--- (format: lakebase_lab_<your_username>)
-GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-
--- Grant access to all current tables and sequences
-GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-
--- Grant access to future tables (recommended)
-ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
-    GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
-ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
-    GRANT ALL ON SEQUENCES TO "<SP_CLIENT_ID>";
-```
-
-> **Important:** You must use `databricks_create_role()` to create the SP's Postgres role.
-> Without it, the role will show "No login" in the Lakebase Roles UI, causing "password
-> authentication failed" errors even though the grants are correct.
-
-### Where to Run SQL Against Lakebase
-
-You can run these commands from:
-
-1. **Lakebase SQL Editor** — open the SQL editor in the Databricks UI for your Lakebase instance
-2. **A Databricks notebook** — use psycopg3 + SDK credentials (if connected to the instance)
-3. **psql** on your local machine using the endpoint host
-4. **DBeaver** or any PostgreSQL client
-
-Example using a notebook with `get_connection()`:
-
-```python
-# Use the get_connection() function from any workshop notebook
-conn = get_connection()
-with conn.cursor() as cur:
-    cur.execute("CREATE EXTENSION IF NOT EXISTS databricks_auth")
-    cur.execute("SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal')")
-    cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
-    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
-    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "<SP_CLIENT_ID>"')
-    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "<SP_CLIENT_ID>"')
-conn.commit()
-```
-
-## Synced Table Permissions (Important)
-
-Synced tables (Reverse ETL) are created by the Lakebase sync pipeline, which uses a different internal role. This means:
-
-- `ALTER DEFAULT PRIVILEGES` from your user **does not** cover synced tables
-- After a sync completes, you must **re-grant** access to the SP:
-
-```sql
-GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-```
+- Environment variables: `LAKEBASE_USER_EMAIL`, `LAKEBASE_PROJECT_ID`, `LAKEBASE_SCHEMA`
+- Default Databricks SDK authentication (from `~/.databrickscfg`)
 
 ## Control Plane Permissions (Branch/Endpoint Management)
 
-For the Lab Console to manage branches and endpoints via the `w.postgres` SDK, the App's Service Principal needs **Lakebase project-level permissions** in the workspace.
+The app uses the SP for SDK calls (branch create/delete, endpoint management).
+The SP is granted project-level access during the setup notebook, so Branch Manager
+and Compute tabs work for any user who has completed the setup.
 
-If the SP does not have these permissions, the Branch Manager and Autoscaling tabs will show errors. In this case:
+## Synced Table Permissions
 
-- A facilitator can manage branches from the CLI or a notebook
-- The app will still work for data operations (CRUD, load test, agent memory)
-
-### Degraded Mode
-
-The Lab Console detects permission errors and shows helpful messages directing users to CLI/notebook alternatives when the SP lacks control plane access.
+Synced tables (Reverse ETL) are created by the Lakebase sync pipeline. The SP
+needs access to the synced table's schema, which is covered by the schema-level
+grants in the setup notebook.

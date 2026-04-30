@@ -1,83 +1,12 @@
 # Lakebase Autoscaling Workshop
 
-A hands-on workshop for exploring **Databricks Lakebase Autoscaling** — a fully managed, serverless PostgreSQL database with autoscaling compute, Git-like branching, scale-to-zero, and instant point-in-time recovery.
+A hands-on workshop for exploring **Databricks Lakebase Autoscaling** -- a fully managed PostgreSQL database that runs inside your Databricks workspace.
 
-## Workshop Structure
+## Quick Start
 
-This workshop follows a **foundation + choose-your-path** model:
+### Step 1: Clone the repo and run setup
 
-```
-                    ┌───────────────────────────────┐
-                    │   00_Setup_Lakebase_Project    │
-                    │      (Foundation — required)   │
-                    └───────────────┬───────────────┘
-                                    │
-         ┌──────────────────────────┼──────────────────────────┐
-         │                          │                          │
-         ▼                          ▼                          ▼
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│ 1. Data         │      │ 2. Reverse ETL  │      │ 3. Development  │
-│    Operations   │      │                 │      │    Experience   │
-│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
-│ • CRUD/JSONB    │      │ • Synced Tables │      │ • Branching     │
-│ • Transactions  │      │ • Delta → PG    │      │ • Autoscaling   │
-│ • Advanced SQL  │      │                 │      │ • Scale-to-zero │
-└─────────────────┘      └─────────────────┘      └─────────────────┘
-
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│ 4. Observability│      │ 5. Auth &       │      │ 6. Backup &     │
-│                 │      │    Permissions  │      │    Recovery     │
-│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
-│ • pg_stat views │      │ • OAuth tokens  │      │ • PITR          │
-│ • Index usage   │      │ • Roles/grants  │      │ • Snapshots     │
-│ • Monitoring    │      │ • External tools│      │ • Restore       │
-└─────────────────┘      └─────────────────┘      └─────────────────┘
-
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│ 7. Agentic      │      │ 8. Online       │      │ 9. App          │
-│    Memory       │      │    Feature Store│      │    Deployment   │
-│ ─────────────── │      │ ─────────────── │      │ ─────────────── │
-│ • Sessions      │      │ • Feature tables│      │ • React +       │
-│ • Multi-turn    │      │ • Publish/serve │      │   FastAPI       │
-│ • JSONB context │      │ • ML serving    │      │ • Full-stack    │
-└─────────────────┘      └─────────────────┘      │   (capstone)    │
-                                                  └─────────────────┘
-```
-
-### Foundation (required)
-
-Run this first — it creates your Lakebase project and seeds your schema:
-
-| Notebook | What It Does |
-|----------|--------------|
-| `notebooks/00_Setup_Lakebase_Project` | Create project, wait for endpoint, seed 6 tables with sample data |
-
-### Lab Paths (choose your adventure)
-
-After completing the foundation, pick any path based on your interest. Each path is **independent** — no need to follow a specific order.
-
-| # | Path | Folder | Labs | Description |
-|---|------|--------|------|-------------|
-| 1 | **Data Operations** | `labs/data-operations/` | Data Operations, Advanced SQL | CRUD, JSONB, arrays, triggers, transactions |
-| 2 | **Reverse ETL** | `labs/reverse-etl/` | Reverse ETL | Sync Delta Lake tables into Lakebase |
-| 3 | **Development Experience** | `labs/development-experience/` | Branches, Autoscaling | Branching, CU sizing, scale-to-zero |
-| 4 | **Observability** | `labs/observability/` | Observability & Monitoring | pg_stat views, index analysis, monitoring |
-| 5 | **Authentication** | `labs/authentication/` | Auth & Permissions | OAuth tokens, roles, two-layer permissions |
-| 6 | **Backup & Recovery** | `labs/backup-recovery/` | Backup & Recovery | PITR, branch snapshots, instant restore |
-| 7 | **Agentic Memory** | `labs/agentic-memory/` | Agent Memory | Persistent AI agent memory with sessions |
-| 8 | **Online Feature Store** | `labs/online-feature-store/` | Online Feature Store | Real-time ML feature serving with Lakebase |
-| 9 | **App Deployment** | `labs/app-deployment/` | Deploy Lab Console | Full-stack React + FastAPI app (capstone) |
-
-Each path folder has its own `README.md` with detailed prerequisites and key concepts.
-
-## Getting Started
-
-### Prerequisites
-
-- A Databricks workspace with **Lakebase Autoscaling** enabled
-- Python 3.11+
-
-### Step 1: Clone and set up
+Open a terminal and run:
 
 ```bash
 git clone <this-repo-url>
@@ -85,134 +14,82 @@ cd Lakebase-Workshop
 bash setup.sh
 ```
 
-The setup script walks you through:
+The setup script will walk you through everything: installing dependencies, connecting to your Databricks workspace, and deploying the workshop content. Just follow the prompts.
 
-1. **Install requirements?** (Y/n) — installs `databricks-sdk`, `psycopg`, and checks for the Databricks CLI
-2. **Connect to your workspace** — enter your workspace URL or pick an existing profile. Opens your browser to authenticate.
-3. **Validate** — confirms Lakebase is available on your workspace
-4. **Deploy now?** (Y/n) — deploys notebooks, labs, and the Lab Console app via Databricks Asset Bundles
-5. **Next steps** — shows you exactly what to do next
+### Step 2: Run the setup notebook
 
-No prior Databricks CLI setup is needed. The script handles everything.
+In your Databricks workspace, open the **`00_Setup_Lakebase_Project`** notebook and click **Run All**.
 
-If you skip the deploy step (or need to redeploy later), run:
+This creates your personal Lakebase database and loads sample data. It takes about 2-3 minutes.
 
-```bash
-databricks bundle deploy --target dev --profile lakebase-workshop
-```
+You can find the notebook at:
+**Workspace > Users > *your email* > .bundle > lakebase-workshop > dev > files > notebooks**
 
-Your content will be at:
-**Workspace → Users → `<your-email>` → .bundle → lakebase-workshop → dev → files**
+### Step 3: Start exploring
 
-### Step 2: Run the foundation
+You're all set. Pick any lab from the list below and dive in. Each lab is self-contained -- no need to follow a specific order.
 
-Open **`00_Setup_Lakebase_Project`** and click **Run All**. It creates your Lakebase project, waits for the endpoint, and seeds your user schema (`lakebase_lab_<your_username>`).
+## Prerequisites
 
-### Step 3: Pick a path
+Before you begin, make sure you have:
 
-Browse the paths in `labs/` and pick whichever interests you. Each lab notebook is self-contained — it installs its own dependencies and derives the project ID automatically.
+- **A Databricks workspace** with Lakebase Autoscaling enabled (your facilitator will confirm this)
+- **Python 3** installed on your computer (most Macs have this already -- check by running `python3 --version` in your terminal)
 
-**Pick a track based on your role:**
+The setup script handles everything else, including the Databricks CLI.
 
-| Track | Who It's For | Labs |
-|-------|-------------|------|
-| **Application Builders** | App developers, AI engineers | Data Operations → Agentic Memory → App Deployment |
-| **Data & ML Engineers** | Data engineers, ML teams | Reverse ETL → Online Feature Store → Observability |
-| **Platform Architects** | Central IT, infrastructure, security | Development Experience → Authentication → Backup & Recovery |
+## Choose a Lab
 
-Tracks are a suggested sequence — every lab is independent, so you can mix and match.
+Every lab is independent. Pick whichever sounds interesting, or follow one of the suggested tracks below.
+
+### Application Builders
+
+*Building apps, APIs, or AI agents? Start here.*
+
+| Lab | What You'll Do |
+|-----|----------------|
+| **Data Operations** | Create, read, update, and delete data; work with JSON and arrays |
+| **Agentic Memory** | Store and query AI agent conversation history |
+| **App Deployment** *(capstone)* | Deploy a full-stack web app backed by Lakebase |
+
+### Data & ML Engineers
+
+*Working with data pipelines or machine learning? Start here.*
+
+| Lab | What You'll Do |
+|-----|----------------|
+| **Reverse ETL** | Sync your Delta Lake tables into Lakebase for fast lookups |
+| **Online Feature Store** | Serve ML features in real time from Lakebase |
+| **Observability** | Monitor database performance and query activity |
+
+### Platform Architects
+
+*Evaluating Lakebase for your infrastructure? Start here.*
+
+| Lab | What You'll Do |
+|-----|----------------|
+| **Development Experience** | Create isolated database branches, test autoscaling |
+| **Authentication** | Explore token-based auth and role permissions |
+| **Backup & Recovery** | Try point-in-time recovery and instant snapshots |
+
+All labs are in the `labs/` folder, organized by topic.
 
 ## Lab Console App
 
-The `apps/lakebase-lab-console/` folder contains an interactive **React + FastAPI** application that ties together every feature from the lab paths into a single UI:
+Your facilitator may have deployed a shared **Lab Console** web app. This app mirrors all the labs in a visual interface -- you can use it alongside (or instead of) the notebooks.
 
-| Module | Feature |
-|--------|---------|
-| Branch Manager | Create/delete branches from the UI |
-| Autoscaling Dashboard | Resize compute and monitor CU ranges |
-| Load Tester | Generate synthetic traffic, stream live metrics |
-| Data Playground | CRUD operations, audit log viewer |
-| Reverse ETL | Synced table status |
-| API Tester | Raw SQL execution against any branch |
-| Agent Memory | Session/message management |
+Open it at: **Compute > Apps > lakebase-lab-console**
 
-### Multi-user support
+The setup notebook (Step 2 above) automatically grants the app access to your database, so it will show your data as soon as you log in.
 
-Each user gets their own app instance — the bundle names it `lakebase-lab-<your-short-name>`. The app auto-discovers its Lakebase project and schema from the attached database resource, so no manual configuration is needed.
+## Troubleshooting
 
-## Architecture
-
-```
-Browser (React Lab Console)
-    |
-    v
-FastAPI Backend (Databricks App)
-    |
-    +---> Databricks SDK (w.postgres) -- branch/endpoint management
-    |
-    +---> psycopg3 (PostgreSQL wire) -- CRUD, load test, agent memory
-    |
-    v
-Lakebase Autoscaling (PostgreSQL)
-    Project > Branch > Endpoint
-```
-
-### Per-user resource hierarchy
-
-```
-Databricks Workspace
-└── Lakebase Project: lakebase-lab-<username>
-    └── Branch: production
-        └── Endpoint (autoscaling, 0.5+ CU)
-            └── Database: databricks_postgres
-                └── Schema: lakebase_lab_<username>
-                    └── Tables: products, events, agent_sessions, ...
-```
-
-## Repository Structure
-
-```
-Lakebase-Workshop/
-├── setup.sh                                    # ← Start here
-├── databricks.yml                              # Bundle config
-├── notebooks/                                  # Foundation (run first)
-│   └── 00_Setup_Lakebase_Project.py
-├── labs/                                       # Lab paths (pick your adventure)
-│   ├── _setup.py                               # Shared setup (auto-loaded by each lab)
-│   ├── README.md                               # Path index
-│   ├── development-experience/                 # Branching + Autoscaling
-│   │   ├── Branches_and_Environments.py
-│   │   └── Autoscaling_and_Compute.py
-│   ├── data-operations/                        # CRUD, JSONB, Advanced SQL
-│   │   ├── Data_Operations.py
-│   │   └── Advanced_Postgres.sql
-│   ├── reverse-etl/                            # Synced tables from Delta
-│   │   └── Reverse_ETL.py
-│   ├── observability/                          # pg_stat views, monitoring
-│   │   └── Observability_and_Monitoring.py
-│   ├── backup-recovery/                        # PITR, snapshots
-│   │   └── Backup_and_Recovery.py
-│   ├── agentic-memory/                         # Agent memory pattern
-│   │   └── Agent_Memory.py
-│   ├── authentication/                         # OAuth, roles, permissions
-│   │   └── Authentication_and_Permissions.py
-│   ├── online-feature-store/                   # Online Feature Store (ML serving)
-│   │   └── Online_Feature_Store.py
-│   └── app-deployment/                         # Lab Console (capstone)
-│       └── Deploy_Lab_Console_App.py
-├── apps/lakebase-lab-console/                  # Lab Console app
-│   ├── app.yaml                                # Databricks Apps config
-│   ├── app.py                                  # FastAPI entry point
-│   ├── backend/                                # FastAPI routes & connection manager
-│   └── frontend/                               # React (Vite) UI
-├── bootstrap/
-│   ├── seed.sql                                # Demo schema DDL (used by notebook 00)
-│   └── requirements.txt                        # Python deps for local use
-└── docs/
-    ├── WORKSHOP_FACILITATOR.md
-    ├── PERMISSIONS.md
-    └── CREDITS.md
-```
+| Problem | What to Do |
+|---------|------------|
+| `setup.sh` fails during login | Run `databricks auth login --host <your-workspace-url> --profile lakebase-workshop` manually |
+| Setup notebook hangs on "Waiting for endpoint" | This is normal -- it can take 2-3 minutes. Let it finish. |
+| "password authentication failed" | Your database token expired (they last 1 hour). Re-run the connection cell in your notebook. |
+| Lab Console shows "Project Not Found" | You haven't run the setup notebook yet. Go back to Step 2. |
 
 ## Resources
 
@@ -220,6 +97,10 @@ Lakebase-Workshop/
 - [Get started with Lakebase](https://docs.databricks.com/aws/en/oltp/projects/get-started)
 - [Databricks Apps Documentation](https://docs.databricks.com/en/dev-tools/databricks-apps/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+
+## For Facilitators
+
+If you're running this workshop for a group, see the [Facilitator Guide](docs/WORKSHOP_FACILITATOR.md) for deployment instructions, timing options, demo scripts, and detailed troubleshooting.
 
 ## Credits
 
