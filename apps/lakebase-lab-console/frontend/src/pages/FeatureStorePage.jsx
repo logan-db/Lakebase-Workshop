@@ -153,7 +153,7 @@ fe.publish_table(
                   )}
                   {s.primary_key_columns && s.primary_key_columns.length > 0 && (
                     <div className="td-mono-sm" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-                      PK: {s.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
+                      PK: {s.primary_key_columns.map(k => <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
                     </div>
                   )}
                   {s.creator && (
@@ -189,7 +189,7 @@ fe.publish_table(
                   <tr key={i}>
                     <td className="td-mono-bold">{f.name}</td>
                     <td className="td-mono-sm">{f.source_table || '--'}</td>
-                    <td>{(f.primary_key_columns || []).map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}</td>
+                    <td>{(f.primary_key_columns || []).map(k => <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}</td>
                     <td><span className={`badge ${stateColor(f.state)}`}>{f.state || '--'}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       {f.run_continuously ? 'Continuous' : f.run_triggered ? 'Triggered' : 'Snapshot'}

@@ -61,9 +61,8 @@ export default function BranchManager() {
           <AlertCircle size={18} />
           <p>{error}</p>
           <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
-              <X size={14} />
-            </button>
-          </div>
+            <X size={14} />
+          </button>
         </div>
       )}
 

@@ -131,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_user ON {schema}.agent_memory_store(user_i
 CREATE INDEX IF NOT EXISTS idx_products_category ON {schema}.products(category);
 CREATE INDEX IF NOT EXISTS idx_products_tags ON {schema}.products USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_audit_table ON {schema}.audit_log(table_name);
+CREATE INDEX IF NOT EXISTS idx_audit_record ON {schema}.audit_log(record_id);
 """
 
 def _ensure_schema(conn, branch):

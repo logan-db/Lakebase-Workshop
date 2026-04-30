@@ -73,9 +73,9 @@ INSTALL_DEPS="${INSTALL_DEPS:-Y}"
 
 if [[ "$INSTALL_DEPS" =~ ^[Yy] ]]; then
   echo ""
-  if ! $PIP_CMD install -q "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" 2>&1 | tail -3; then
+  if ! $PIP_CMD install -q "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" 2>/dev/null; then
     info "Retrying with --break-system-packages (PEP 668)..."
-    $PIP_CMD install -q --break-system-packages "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" 2>&1 | tail -3 || true
+    $PIP_CMD install -q --break-system-packages "databricks-sdk>=0.81.0" "psycopg[binary]>=3.0" 2>/dev/null || true
   fi
   ok "Python packages installed"
 else
@@ -420,7 +420,9 @@ with conn.cursor() as cur:
             raise
     cur.execute(f'GRANT ALL ON SCHEMA {schema} TO "{sp_id}"')
     cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {schema} TO "{sp_id}"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {schema} TO "{sp_id}"')
     cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} GRANT ALL ON TABLES TO "{sp_id}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} GRANT ALL ON SEQUENCES TO "{sp_id}"')
 conn.commit()
 conn.close()
 print(f"  ✓ SP granted access to schema: {schema}")

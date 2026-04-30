@@ -237,7 +237,7 @@ export default function ComputePage() {
             <tr><th>CU</th><th>RAM</th><th>Max Connections</th><th>Use Case</th></tr>
           </thead>
           <tbody>
-            <tr><td><span className="badge badge-teal">0.5</span></td><td>~1 GB</td><td>104</td><td>Dev/test, low traffic</td></tr>
+            <tr><td><span className="badge badge-cyan">0.5</span></td><td>~1 GB</td><td>104</td><td>Dev/test, low traffic</td></tr>
             <tr><td><span className="badge badge-info">4</span></td><td>~8 GB</td><td>839</td><td>Small production apps</td></tr>
             <tr><td><span className="badge badge-purple">8</span></td><td>~16 GB</td><td>1,678</td><td>Medium production</td></tr>
             <tr><td><span className="badge badge-warning">16</span></td><td>~32 GB</td><td>3,357</td><td>High-throughput apps</td></tr>

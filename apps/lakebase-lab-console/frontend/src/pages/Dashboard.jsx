@@ -124,7 +124,7 @@ export default function Dashboard({ onNavigate }) {
           </div>
           <div className="status-banner-right">
             <span className="badge badge-info" title="Branch">{config?.branch_id || 'production'}</span>
-            <span className="badge badge-teal" title="Schema">{config?.schema || '...'}</span>
+            <span className="badge badge-cyan" title="Schema">{config?.schema || '...'}</span>
             {config?.user_email && (
               <span className="badge badge-info" title={config.user_email}>
                 {config.user_email.split('@')[0]}

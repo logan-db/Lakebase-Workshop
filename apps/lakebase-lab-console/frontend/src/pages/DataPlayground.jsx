@@ -302,7 +302,7 @@ export default function DataPlayground() {
                             {p.tags && p.tags.length > 0 && (
                               <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                                 {p.tags.slice(0, 3).map((t, i) => (
-                                  <span key={i} className="badge badge-teal" style={{ fontSize: 10 }}>{t}</span>
+                                  <span key={i} className="badge badge-cyan" style={{ fontSize: 10 }}>{t}</span>
                                 ))}
                                 {p.tags.length > 3 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{p.tags.length - 3}</span>}
                               </div>

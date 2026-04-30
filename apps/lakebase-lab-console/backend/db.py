@@ -231,6 +231,8 @@ def get_pool(
             conninfo=conninfo,
             min_size=min_size,
             max_size=max_size,
+            timeout=10,
+            max_lifetime=600,
             kwargs={"row_factory": dict_row},
             open=True,
         )

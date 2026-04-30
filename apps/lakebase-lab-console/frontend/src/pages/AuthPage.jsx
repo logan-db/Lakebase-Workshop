@@ -287,7 +287,7 @@ export default function AuthPage() {
                 <tr key={i}>
                   <td className="td-mono-bold">{g.table_name}</td>
                   <td className="td-mono-xs">{g.grantee}</td>
-                  <td><span className="badge badge-teal">{g.privilege_type}</span></td>
+                  <td><span className="badge badge-cyan">{g.privilege_type}</span></td>
                 </tr>
               ))}
             </tbody>

@@ -106,7 +106,7 @@ export default function BackupRecoveryPage() {
               <td>Pre-migration safety net</td>
             </tr>
             <tr>
-              <td><span className="badge badge-teal">Branch TTL</span></td>
+              <td><span className="badge badge-cyan">Branch TTL</span></td>
               <td>Branches auto-delete after a configurable time</td>
               <td>Dev/test cleanup</td>
             </tr>

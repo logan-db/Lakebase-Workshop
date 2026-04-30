@@ -149,7 +149,9 @@ print(f"SP Name:      {getattr(app_info, 'service_principal_name', 'N/A')}")
 # MAGIC -- Grant schema-level access
 # MAGIC GRANT ALL ON SCHEMA my_schema TO "<SP_CLIENT_ID>";
 # MAGIC GRANT ALL ON ALL TABLES IN SCHEMA my_schema TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA my_schema TO "<SP_CLIENT_ID>";
 # MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA my_schema GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA my_schema GRANT ALL ON SEQUENCES TO "<SP_CLIENT_ID>";
 # MAGIC ```
 
 # COMMAND ----------
@@ -186,7 +188,9 @@ with conn.cursor() as cur:
 
     cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "{sp_id}"')
     cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
     cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_id}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_id}"')
     print(f"✓ Granted SP access to schema: {PG_SCHEMA}")
 
 conn.commit()

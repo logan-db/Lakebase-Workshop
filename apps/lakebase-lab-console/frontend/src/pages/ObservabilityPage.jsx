@@ -302,7 +302,7 @@ export default function ObservabilityPage() {
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                         <span style={{ width: 120, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>{s.table_name}</span>
                         <div style={{ flex: 1, height: 14, background: 'var(--bg-inset)', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                          <div style={{ height: '100%', width: `${((s.total_bytes || 0) / maxBytes) * 100}%`, background: 'linear-gradient(90deg, var(--accent), #ff9a5c)', borderRadius: 4, transition: 'width 0.3s' }} />
+                          <div style={{ height: '100%', width: `${((s.total_bytes || 0) / maxBytes) * 100}%`, background: 'linear-gradient(90deg, var(--accent), #2dd4bf)', borderRadius: 4, transition: 'width 0.3s' }} />
                         </div>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', minWidth: 70, textAlign: 'right' }}>{s.total_size}</span>
                       </div>
@@ -331,7 +331,7 @@ export default function ObservabilityPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span className="badge badge-info">PID {a.pid}</span>
-                      <span className={`badge ${a.state === 'active' ? 'badge-success' : a.state === 'idle' ? 'badge-teal' : 'badge-warning'}`}>{a.state}</span>
+                      <span className={`badge ${a.state === 'active' ? 'badge-success' : a.state === 'idle' ? 'badge-cyan' : 'badge-warning'}`}>{a.state}</span>
                       {a.wait_event_type && <span className="badge badge-purple">{a.wait_event_type}: {a.wait_event}</span>}
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{a.username}</span>

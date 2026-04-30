@@ -144,7 +144,7 @@ w.postgres.create_synced_table(
                 )}
                 {t.primary_key_columns && t.primary_key_columns.length > 0 && (
                   <div className="td-mono-sm" style={{ color: 'var(--text-muted)' }}>
-                    PK: {t.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
+                    PK: {t.primary_key_columns.map(k => <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
                   </div>
                 )}
                 {t.scheduling_policy && (

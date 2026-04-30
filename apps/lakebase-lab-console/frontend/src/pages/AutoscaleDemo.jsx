@@ -3,7 +3,7 @@ import { api } from '../api'
 import {
   Sun, Flame, Zap, Sparkles, Activity, Server,
   Play, Square, Settings, Clock, AlertCircle, RefreshCw, X, Trash2,
-  Database, Cpu, ArrowUpRight, Boxes
+  Database, Cpu, ArrowUpRight, Boxes, Search
 } from '../icons'
 import LabBanner from '../LabBanner'
 
@@ -377,18 +377,53 @@ export default function AutoscaleDemo() {
           {/* Read / Write Breakdown */}
           <div className="card">
             <div className="card-header">
-              <h3><Database size={16} /> Read / Write Breakdown</h3>
+              <h3><Database size={16} /> Query Breakdown</h3>
               <span className="badge badge-purple">{metrics.total_queries.toLocaleString()} total queries</span>
             </div>
             <div className="rw-breakdown">
               <div className="rw-section">
                 <div className="rw-header">
-                  <span className="rw-dot read" />
-                  <span className="rw-title">Reads</span>
-                  <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Full-Table Scans</span>
+                  <span className="rw-dot" style={{ background: 'var(--teal)' }} />
+                  <span className="rw-title">Point Lookups</span>
+                  <span className="badge badge-success" style={{ marginLeft: 'auto' }}>PK Index</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  70% lightweight lookups and counts, 30% heavy full-table scans (aggregations, window functions, random sorts) on <code style={{ color: 'var(--blue)' }}>events</code> to push CPU
+                  Single-row fetches by primary key (<code style={{ color: 'var(--teal)' }}>SELECT ... WHERE event_id = ?</code>) — the core OLTP read pattern. Should show low, stable latency regardless of table size.
+                </p>
+                <div className="rw-stats">
+                  <div>
+                    <div className="rw-stat-value" style={{ color: 'var(--teal)' }}>{(metrics.lookup_queries || 0).toLocaleString()}</div>
+                    <div className="rw-stat-label">Queries</div>
+                  </div>
+                  <div>
+                    <div className="rw-stat-value" style={{ color: 'var(--teal)', fontSize: metrics.lookup_avg_latency_ms < 10 ? 28 : undefined, fontWeight: metrics.lookup_avg_latency_ms < 10 ? 700 : undefined }}>{metrics.lookup_avg_latency_ms || 0}</div>
+                    <div className="rw-stat-label">Avg Latency (ms)</div>
+                  </div>
+                  <div>
+                    <div className="rw-stat-value" style={{ color: metrics.lookup_avg_latency_ms > 0 && metrics.read_avg_latency_ms > 0 ? 'var(--teal)' : 'var(--text-secondary)' }}>
+                      {metrics.lookup_avg_latency_ms > 0 && metrics.read_avg_latency_ms > 0
+                        ? `${Math.round(metrics.read_avg_latency_ms / metrics.lookup_avg_latency_ms)}x`
+                        : '--'}
+                    </div>
+                    <div className="rw-stat-label">Faster than Scans</div>
+                  </div>
+                </div>
+                <div className="rw-bar-track">
+                  <div className="rw-bar-fill" style={{ background: 'var(--teal)', width: `${metrics.total_queries > 0 ? ((metrics.lookup_queries || 0) / metrics.total_queries * 100) : 0}%` }} />
+                </div>
+                {(metrics.lookup_errors || 0) > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{metrics.lookup_errors} errors</div>
+                )}
+              </div>
+
+              <div className="rw-section">
+                <div className="rw-header">
+                  <span className="rw-dot read" />
+                  <span className="rw-title">Scan Reads</span>
+                  <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Aggregations</span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Analytical queries: aggregations, window functions, and full-table scans on <code style={{ color: 'var(--blue)' }}>events</code> to push CPU and trigger autoscaling
                 </p>
                 <div className="rw-stats">
                   <div>
@@ -642,11 +677,28 @@ export default function AutoscaleDemo() {
               <h3><Boxes size={16} /> What Happens When You Send a Spike</h3>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
-              Each preset spawns concurrent async workers that fire <strong>heavy queries</strong> using connection pooling.
-              Writes batch-insert hundreds of rows per statement (plus audit trigger overhead). Reads run full-table
-              aggregations and scans that push CPU utilization high enough to trigger autoscaling.
+              Each preset spawns concurrent async workers that fire a mix of <strong>point lookups</strong>, <strong>analytical scans</strong>, and <strong>batch writes</strong> using connection pooling.
+              Point lookups show Lakebase's OLTP strength (low-ms PK reads), while scans and writes push CPU high enough to trigger autoscaling.
             </p>
             <div className="explainer-grid">
+              <div className="explainer-item">
+                <div className="explainer-icon" style={{ background: 'var(--teal-dim)', color: 'var(--teal)' }}>
+                  <Search size={18} />
+                </div>
+                <div className="explainer-text">
+                  <h4>Point Lookups (PK Index)</h4>
+                  <p>Half of read workers do single-row <code>SELECT ... WHERE event_id = ?</code> fetches. These hit the primary key B-tree index and return in 1-5 ms regardless of table size — the core OLTP pattern.</p>
+                </div>
+              </div>
+              <div className="explainer-item">
+                <div className="explainer-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
+                  <Database size={18} />
+                </div>
+                <div className="explainer-text">
+                  <h4>Scan Reads (Analytical)</h4>
+                  <p>The other half run aggregations, window functions, and bounded scans on <code>events</code> to push CPU. These are intentionally heavier to contrast with point lookup latency and trigger autoscaling.</p>
+                </div>
+              </div>
               <div className="explainer-item">
                 <div className="explainer-icon" style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}>
                   <ArrowUpRight size={18} />
@@ -657,30 +709,12 @@ export default function AutoscaleDemo() {
                 </div>
               </div>
               <div className="explainer-item">
-                <div className="explainer-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
-                  <Database size={18} />
-                </div>
-                <div className="explainer-text">
-                  <h4>Mixed Reads (Realistic + CPU-Intensive)</h4>
-                  <p>Most reads are lightweight (recent rows, counts). 30% are heavy full-table scans with random sorts, md5 hashing, window functions, and JSONB ops that push CPU high enough to trigger autoscaling.</p>
-                </div>
-              </div>
-              <div className="explainer-item">
-                <div className="explainer-icon" style={{ background: 'var(--teal-dim)', color: 'var(--teal)' }}>
-                  <Activity size={18} />
-                </div>
-                <div className="explainer-text">
-                  <h4>Connection Pooling</h4>
-                  <p>Persistent connections are reused across queries (no per-query SSL handshake). Latency reflects query execution time, not connection overhead.</p>
-                </div>
-              </div>
-              <div className="explainer-item">
                 <div className="explainer-icon" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
                   <Cpu size={18} />
                 </div>
                 <div className="explainer-text">
                   <h4>Autoscaler Triggers</h4>
-                  <p>Lakebase monitors <strong>CPU load</strong>, <strong>memory usage</strong>, and <strong>working set size</strong>. Large JSONB payloads grow the working set beyond RAM, random sorts spike CPU, and concurrent batch writes push memory — triggering scale-up.</p>
+                  <p>Lakebase monitors <strong>CPU load</strong>, <strong>memory usage</strong>, and <strong>working set size</strong>. Watch how point lookup latency stays stable even as scans slow down — then both improve as the autoscaler adds compute.</p>
                 </div>
               </div>
             </div>

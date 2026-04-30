@@ -292,7 +292,9 @@ if sp_id:
 
         cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "{sp_id}"')
         cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
         cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_id}"')
+        cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_id}"')
         print(f"✓ Granted SP access to schema: {PG_SCHEMA}")
 
     grant_conn.commit()
