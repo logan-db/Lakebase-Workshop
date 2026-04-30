@@ -1,23 +1,23 @@
 """Data playground routes: CRUD on workshop tables."""
 
 import json
-import os
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .db import execute_query, execute_write
+from .db import execute_query, execute_write, get_schema
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
 
 @router.post("/seed")
-def seed_tables():
+def seed_tables(user: UserContext = Depends(get_current_user)):
     """Create workshop tables if they don't exist (idempotent)."""
     seed_file = Path(__file__).parent.parent.parent / "bootstrap" / "seed.sql"
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    schema = get_schema(user)
 
     if seed_file.exists():
         raw = seed_file.read_text()
@@ -32,7 +32,7 @@ def seed_tables():
         if not stmt or stmt.startswith("--"):
             continue
         try:
-            execute_write(stmt)
+            execute_write(user, stmt)
             results.append({"sql": stmt[:80], "status": "ok"})
         except Exception as e:
             results.append({"sql": stmt[:80], "status": "error", "error": str(e)})
@@ -137,22 +137,25 @@ class EventCreate(BaseModel):
 # --- Products ---
 
 @router.get("/products")
-def list_products(category: str | None = None, limit: int = 50):
+def list_products(category: str | None = None, limit: int = 50, user: UserContext = Depends(get_current_user)):
     """List products, optionally filtered by category."""
     if category:
         return execute_query(
+            user,
             "SELECT * FROM products WHERE category = %s ORDER BY product_id LIMIT %s",
             (category, limit),
         )
     return execute_query(
+        user,
         "SELECT * FROM products ORDER BY product_id LIMIT %s", (limit,)
     )
 
 
 @router.get("/products/{product_id}")
-def get_product(product_id: int):
+def get_product(product_id: int, user: UserContext = Depends(get_current_user)):
     """Get a single product."""
     rows = execute_query(
+        user,
         "SELECT * FROM products WHERE product_id = %s", (product_id,)
     )
     if not rows:
@@ -161,9 +164,10 @@ def get_product(product_id: int):
 
 
 @router.post("/products")
-def create_product(req: ProductCreate):
+def create_product(req: ProductCreate, user: UserContext = Depends(get_current_user)):
     """Insert a new product."""
     return execute_write(
+        user,
         "INSERT INTO products (name, description, price, stock_quantity, category, tags) "
         "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
         (req.name, req.description, req.price, req.stock_quantity, req.category, req.tags),
@@ -171,7 +175,7 @@ def create_product(req: ProductCreate):
 
 
 @router.put("/products/{product_id}")
-def update_product(product_id: int, req: ProductUpdate):
+def update_product(product_id: int, req: ProductUpdate, user: UserContext = Depends(get_current_user)):
     """Update an existing product (partial)."""
     sets = []
     values = []
@@ -195,15 +199,17 @@ def update_product(product_id: int, req: ProductUpdate):
     values.append(product_id)
 
     return execute_write(
+        user,
         f"UPDATE products SET {', '.join(sets)} WHERE product_id = %s RETURNING *",
         tuple(values),
     )
 
 
 @router.delete("/products/{product_id}")
-def delete_product(product_id: int):
+def delete_product(product_id: int, user: UserContext = Depends(get_current_user)):
     """Delete a product."""
     result = execute_write(
+        user,
         "DELETE FROM products WHERE product_id = %s", (product_id,)
     )
     if result[0].get("rowcount", 0) == 0:
@@ -214,44 +220,49 @@ def delete_product(product_id: int):
 # --- Events ---
 
 @router.get("/events")
-def list_events(event_type: str | None = None, limit: int = 100):
+def list_events(event_type: str | None = None, limit: int = 100, user: UserContext = Depends(get_current_user)):
     """List recent events."""
     if event_type:
         return execute_query(
+            user,
             "SELECT * FROM events WHERE event_type = %s ORDER BY created_at DESC LIMIT %s",
             (event_type, limit),
         )
     return execute_query(
+        user,
         "SELECT * FROM events ORDER BY created_at DESC LIMIT %s", (limit,)
     )
 
 
 @router.post("/events")
-def create_event(req: EventCreate):
+def create_event(req: EventCreate, user: UserContext = Depends(get_current_user)):
     """Insert a new event."""
     return execute_write(
+        user,
         "INSERT INTO events (event_type, source, payload) VALUES (%s, %s, %s) RETURNING *",
         (req.event_type, req.source, json.dumps(req.payload)),
     )
 
 
 @router.delete("/events/loadtest")
-def clear_loadtest_events():
+def clear_loadtest_events(user: UserContext = Depends(get_current_user)):
     """Delete all events from load tests."""
-    return execute_write("DELETE FROM events WHERE event_type = 'loadtest'")
+    return execute_write(user, "DELETE FROM events WHERE event_type = 'loadtest'")
 
 
 # --- Audit Log ---
 
 @router.get("/audit")
-def list_audit_log(table_name: str | None = None, limit: int = 50):
+def list_audit_log(table_name: str | None = None, limit: int = 50, user: UserContext = Depends(get_current_user)):
     """View the audit log."""
     if table_name:
         return execute_query(
+            user,
             "SELECT * FROM audit_log WHERE table_name = %s ORDER BY created_at DESC LIMIT %s",
             (table_name, limit),
         )
     return execute_query(
+        user,
         "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT %s", (limit,)
     )
 
@@ -259,13 +270,13 @@ def list_audit_log(table_name: str | None = None, limit: int = 50):
 # --- Table stats ---
 
 @router.get("/stats")
-def table_stats():
+def table_stats(user: UserContext = Depends(get_current_user)):
     """Get row counts for all workshop tables."""
     tables = ["products", "events", "agent_sessions", "agent_messages", "audit_log"]
     stats = {}
     for t in tables:
         try:
-            rows = execute_query(f"SELECT count(*) as cnt FROM {t}")
+            rows = execute_query(user, f"SELECT count(*) as cnt FROM {t}")
             stats[t] = rows[0]["cnt"]
         except Exception:
             stats[t] = -1
@@ -284,12 +295,12 @@ _BLOCKED_PATTERNS = re.compile(
 
 
 @router.post("/query")
-def run_query(req: QueryRequest):
+def run_query(req: QueryRequest, user: UserContext = Depends(get_current_user)):
     """Run a read-only SQL query for the SQL playground."""
     sql = req.sql.strip().rstrip(";")
     if _BLOCKED_PATTERNS.search(sql):
         raise HTTPException(400, "DDL/DCL statements are not allowed in the query playground")
     try:
-        return execute_query(sql)
+        return execute_query(user, sql)
     except Exception as e:
         raise HTTPException(400, str(e))

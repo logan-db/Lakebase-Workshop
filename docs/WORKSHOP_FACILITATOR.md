@@ -11,6 +11,7 @@ Before the workshop:
 - [ ] Databricks workspace with Lakebase Autoscaling enabled
 - [ ] Each participant has workspace access with permissions to create Lakebase projects
 - [ ] Python 3.11+ installed on each participant's machine
+- [ ] (Facilitator only) Node.js installed for building the Lab Console frontend
 
 ## Workshop Structure
 
@@ -145,58 +146,61 @@ bash setup.sh
 
 The script installs dependencies, authenticates the Databricks CLI, validates Lakebase access, and configures the bundle profile.
 
-### 2. Deploy content to the workspace
+### 2. Deploy the Lab Console (facilitator only)
 
-**Option A — Deploy as a Declarative Automation Bundle (recommended):**
+The Lab Console is a **shared app** — the facilitator deploys it once and all
+participants use it. During `setup.sh`, choose **option 2 (Labs + App)** to deploy
+everything including the app.
+
+The setup script will also:
+- **Attach a postgres resource** to the app (your Lakebase project), giving the SP the `postgres` OAuth scope
+- **Grant the SP access** to your schema so the app can connect to your project
+
+To deploy manually:
 
 ```bash
+# Build the frontend
+cd apps/lakebase-lab-console/frontend
+npm install && npm run build
+cd ../../..
+
+# Deploy the bundle + start the app
 databricks bundle deploy --target dev --profile lakebase-workshop
+databricks bundle run lakebase_lab_console --target dev --profile lakebase-workshop
 ```
 
-Content appears at: **Workspace → Users → `<email>` → .bundle → lakebase-workshop → dev → files**
+The app is named `lakebase-lab-console` and is accessible to all workspace users
+at **Compute → Apps → lakebase-lab-console**.
 
-**Option B — Upload from the CLI:**
+> **Per-user SP grant required.** Each participant must grant the app's Service
+> Principal access to their Lakebase project. This happens automatically in Step 6
+> of `00_Setup_Lakebase_Project`, or can be done from the App Deployment lab.
 
-```bash
-databricks workspace mkdirs "/Workspace/Users/<email>/lakebase-workshop" --profile lakebase-workshop
+### 3. Run the foundation (all participants)
 
-# Upload foundation
-for nb in notebooks/*.py; do
-  databricks workspace import \
-    "/Workspace/Users/<email>/lakebase-workshop/$(basename $nb)" \
-    --file "$nb" --format SOURCE --language PYTHON \
-    --overwrite --profile lakebase-workshop
-done
+Each participant opens `notebooks/00_Setup_Lakebase_Project` and clicks **Run All**.
+This creates their personal Lakebase project (`lakebase-lab-<username>`), seeds a
+per-user schema (`lakebase_lab_<username>`), and grants the Lab Console app's SP
+access to their project (Step 6).
 
-# Upload lab paths
-for nb in labs/**/*.py; do
-  dir=$(dirname "$nb" | sed 's|labs/||')
-  databricks workspace mkdirs "/Workspace/Users/<email>/lakebase-workshop/labs/$dir" \
-    --profile lakebase-workshop
-  databricks workspace import \
-    "/Workspace/Users/<email>/lakebase-workshop/labs/$dir/$(basename $nb)" \
-    --file "$nb" --format SOURCE --language PYTHON \
-    --overwrite --profile lakebase-workshop
-done
-```
+### 4. Open the Lab Console
 
-### 3. Run the foundation
+Once the foundation is complete, participants can open the Lab Console from
+**Compute → Apps → lakebase-lab-console**. The app will show their project,
+tables, and data automatically.
 
-Each participant opens `notebooks/00_Setup_Lakebase_Project` and clicks **Run All**. This creates their personal Lakebase project (`lakebase-lab-<username>`) and seeds a per-user schema (`lakebase_lab_<username>`).
+### 5. Choose lab paths (notebooks or app — unified experience)
 
-### 4. Choose lab paths
+Every lab is available **two ways**, and participants can switch between them freely:
 
-Participants explore paths at their own pace. Each lab is self-contained — it installs its own dependencies and derives the project ID automatically.
+- **Notebook path:** Open a lab notebook and run cells step-by-step. Each notebook includes a clickable banner linking to the corresponding app page.
+- **App path:** Open the Lab Console and navigate to a lab page. Each page includes a banner linking back to the corresponding notebook.
+
+The cross-links use URL hashes (e.g., `#data`, `#agent`, `#branches`) so participants can deep-link between the two experiences. This means:
+- A facilitator can say *"open the app and go to Data Ops"* or *"open the Data Operations notebook"* — both cover the same material.
+- Participants who prefer visual UI can stay in the app; those who prefer code can stay in notebooks.
 
 For a guided workshop, direct participants to specific paths based on the timing options above.
-
-### 5. (Optional) Deploy the Lab Console app
-
-For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Console_App`. This requires:
-
-1. Deploying via `databricks bundle deploy` (the pre-built frontend is included)
-2. Adding the Lakebase database as a resource in the Apps UI
-3. Granting SP permissions (see `docs/PERMISSIONS.md`)
 
 ## Demo Script
 
@@ -229,8 +233,9 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 #### App Deployment (capstone)
 
 1. Walk through the Lab Console architecture (React + FastAPI + Lakebase)
-2. Show how the app connects via OAuth and the Databricks SDK
-3. Key talking point: *"A full-stack app running on Databricks, backed by Lakebase — deployed in minutes."*
+2. Show how the app routes each user to their own project via email-based routing
+3. Explain the SP auth model: why user tokens lack the `postgres` scope, and how the SP bridges the gap
+4. Key talking point: *"A full-stack app running on Databricks, backed by Lakebase — deployed once, serves everyone."*
 
 ---
 
@@ -296,6 +301,123 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 4. Explain PITR and the 35-day window
 5. Key talking point: *"Backups are always on. Recovery is instant via branching."*
 
+## Architecture
+
+### App Request Flow
+
+```
+Browser (React Lab Console)
+    |
+    v
+Databricks App Proxy (injects X-Forwarded-Email header)
+    |
+    v
+FastAPI Backend (shared Databricks App: lakebase-lab-console)
+    |
+    +---> X-Forwarded-Email → derive project_id + schema (routing)
+    |
+    +---> App SP (WorkspaceClient) → generate_database_credential()
+    |          for the user's project endpoint
+    |
+    +---> psycopg3 (user=SP_CLIENT_ID) → user's Lakebase project
+    |          (search_path = user's schema)
+    |
+    v
+User's Lakebase Project (lakebase-lab-<username>)
+    Project > Branch > Endpoint
+```
+
+### Per-User Resource Hierarchy
+
+```
+Databricks Workspace
+└── Lakebase Project: lakebase-lab-<username>    (one per user)
+    └── Branch: production
+        └── Endpoint (autoscaling, 0.5+ CU)
+            └── Database: databricks_postgres
+                └── Schema: lakebase_lab_<username>
+                    └── Tables: products, events, agent_sessions, ...
+```
+
+### Lab Console — App Page / Notebook Cross-Reference
+
+| App Page | Feature | Corresponding Notebook |
+|----------|---------|----------------------|
+| Data Ops (`#data`) | CRUD, JSONB queries, audit log | `labs/data-operations/Data_Operations` |
+| Branch Manager (`#branches`) | Create/delete branches | `labs/development-experience/Branches_and_Environments` |
+| Autoscale Demo (`#autoscale`) | Load testing + live CU tracking | `labs/development-experience/Autoscaling_and_Compute` |
+| Compute (`#compute`) | Resize CU ranges | `labs/development-experience/Autoscaling_and_Compute` |
+| Observability (`#observability`) | pg_stat views, index stats | `labs/observability/Observability_and_Monitoring` |
+| Reverse ETL (`#sync`) | Synced table status | `labs/reverse-etl/Reverse_ETL` |
+| Feature Store (`#feature-store`) | Online store status | `labs/online-feature-store/Online_Feature_Store` |
+| Agent Memory (`#agent`) | Session/message management | `labs/agentic-memory/Agent_Memory` |
+| Auth & Permissions (`#auth`) | OAuth tokens, roles, grants | `labs/authentication/Authentication_and_Permissions` |
+| Backup & Recovery (`#backup`) | Snapshots, PITR | `labs/backup-recovery/Backup_and_Recovery` |
+| API Tester (`#api`) | Raw SQL execution | *(tools-only, no notebook)* |
+
+### Shared App with Per-User Routing (SP Auth + Email Routing)
+
+The Lab Console is deployed **once** and shared by all workshop participants. When a user
+opens the app, it reads their email from the Databricks Apps proxy headers and
+connects to **their** Lakebase project automatically:
+
+- User email → project ID (`lakebase-lab-<username>`) and schema
+- The app's Service Principal → SDK calls and database credentials
+- Each user grants the SP access to their project during setup (Step 6)
+
+The facilitator deploys the app once with `databricks bundle deploy`. Each user runs
+`00_Setup_Lakebase_Project` (which includes granting SP access) and opens the app.
+
+See [PERMISSIONS.md](PERMISSIONS.md) for full details on the two-layer permission model.
+
+## Repository Structure
+
+```
+Lakebase-Workshop/
+├── setup.sh                                    # ← Start here
+├── databricks.yml                              # Bundle config
+├── notebooks/                                  # Foundation (run first)
+│   └── 00_Setup_Lakebase_Project.py
+├── labs/                                       # Lab paths (pick your adventure)
+│   ├── _setup.py                               # Shared setup (auto-loaded by each lab)
+│   ├── README.md                               # Path index
+│   ├── development-experience/                 # Branching + Autoscaling
+│   │   ├── Branches_and_Environments.py
+│   │   └── Autoscaling_and_Compute.py
+│   ├── data-operations/                        # CRUD, JSONB, Advanced SQL
+│   │   ├── Data_Operations.py
+│   │   └── Advanced_Postgres.sql
+│   ├── reverse-etl/                            # Synced tables from Delta
+│   │   └── Reverse_ETL.py
+│   ├── observability/                          # pg_stat views, monitoring
+│   │   └── Observability_and_Monitoring.py
+│   ├── backup-recovery/                        # PITR, snapshots
+│   │   └── Backup_and_Recovery.py
+│   ├── agentic-memory/                         # Agent memory pattern
+│   │   └── Agent_Memory.py
+│   ├── authentication/                         # OAuth, roles, permissions
+│   │   └── Authentication_and_Permissions.py
+│   ├── online-feature-store/                   # Online Feature Store (ML serving)
+│   │   └── Online_Feature_Store.py
+│   └── app-deployment/                         # Lab Console (capstone)
+│       └── Deploy_Lab_Console_App.py
+├── apps/lakebase-lab-console/                  # Lab Console app (shared)
+│   ├── app.yaml                                # Databricks Apps config (postgres resource + env)
+│   ├── app.py                                  # FastAPI entry point
+│   ├── backend/                                # FastAPI routes, user context, connection manager
+│   │   ├── user_context.py                     # User identity from forwarded headers
+│   │   ├── db.py                               # SP-based connection manager with per-user routing
+│   │   └── routes_*.py                         # API routes
+│   └── frontend/                               # React (Vite) UI
+├── bootstrap/
+│   ├── seed.sql                                # Demo schema DDL (used by notebook 00)
+│   └── requirements.txt                        # Python deps for local use
+└── docs/
+    ├── WORKSHOP_FACILITATOR.md
+    ├── PERMISSIONS.md
+    └── CREDITS.md
+```
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -303,8 +425,11 @@ For the full interactive experience, follow `labs/app-deployment/Deploy_Lab_Cons
 | `setup.sh` fails at auth | Run `databricks auth login --host <url> --profile lakebase-workshop` manually |
 | Foundation hangs on "Waiting for endpoint" | Endpoint creation can take 2–3 minutes. Let it run. |
 | "password authentication failed" | Token expired (1h TTL). Re-run the connection cell. |
-| "permission denied for table" | Run the GRANT statements from `docs/PERMISSIONS.md` |
-| Lab Console shows "Loading..." forever | Check `/api/dbtest` — likely missing DB resource or SP permissions |
+| Lab Console shows "Project Not Found" | The user hasn't run `00_Setup_Lakebase_Project` yet. |
+| Lab Console shows "permission denied for schema" | The user hasn't granted the SP access (Step 6 in setup notebook). Run the App Deployment lab. |
+| Lab Console shows "Loading..." forever | Check `/api/dbtest` — likely a token or endpoint issue |
+| Lab Console shows wrong user | Hard-refresh the browser to pick up fresh headers |
+| "does not have required scopes: postgres" | The app's postgres resource is not attached. Re-run `setup.sh` with option 2, or attach manually in the Apps UI. |
 
 ## Cleanup
 

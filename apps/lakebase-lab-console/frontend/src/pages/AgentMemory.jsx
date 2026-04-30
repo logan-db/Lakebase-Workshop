@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { Bot, Plus, Trash2, Send, MessageSquare, X, Brain, Key } from '../icons'
+import LabBanner from '../LabBanner'
 
 const TABS = [
   { id: 'short', label: 'Short-term Memory', Icon: MessageSquare },
@@ -78,7 +79,7 @@ function ShortTermPanel() {
           <button className="btn btn-xs" onClick={() => setError(null)} style={{ marginLeft: 'auto', padding: '2px 8px' }}>&times;</button>
         </div>
       )}
-    <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16 }}>
+    <div className="grid-2col" style={{ gridTemplateColumns: '300px 1fr' }}>
       <div className="card" style={{ alignSelf: 'start' }}>
         <div className="card-header">
           <h3><Bot size={16} /> Threads</h3>
@@ -92,7 +93,7 @@ function ShortTermPanel() {
         </button>
 
         {sessions.length === 0 ? (
-          <div className="empty-state" style={{ padding: 20 }}>
+          <div className="empty-state empty-state-compact">
             <div className="empty-icon"><MessageSquare size={24} /></div>
             <p>No threads yet</p>
           </div>
@@ -101,16 +102,17 @@ function ShortTermPanel() {
             {sessions.map((s) => (
               <div
                 key={s.session_id}
+                className="list-item-card"
                 style={{
-                  padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-                  background: activeSession === s.session_id ? 'var(--accent-dim)' : 'var(--bg-secondary)',
-                  border: `1px solid ${activeSession === s.session_id ? 'var(--border-accent)' : 'var(--border)'}`,
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s',
+                  padding: '10px 14px', cursor: 'pointer',
+                  background: activeSession === s.session_id ? 'var(--accent-dim)' : undefined,
+                  borderColor: activeSession === s.session_id ? 'var(--border-accent)' : undefined,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}
                 onClick={() => setActiveSession(s.session_id)}
               >
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{s.session_id}</div>
+                  <div className="td-mono-bold" style={{ fontSize: 12 }}>{s.session_id}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {s.agent_name} &middot; {s.message_count} msgs
                   </div>
@@ -140,7 +142,7 @@ function ShortTermPanel() {
 
             <div className="chat-messages" ref={chatRef}>
               {messages.length === 0 && (
-                <div className="empty-state" style={{ padding: 20 }}><p>No messages yet. Send one below.</p></div>
+                <div className="empty-state empty-state-compact"><p>No messages yet. Send one below.</p></div>
               )}
               {messages.map((m, i) => (
                 <div key={i} className={`chat-msg ${m.role}`}>
@@ -227,7 +229,7 @@ function LongTermPanel() {
           <button className="btn btn-xs" onClick={() => setError(null)} style={{ marginLeft: 'auto', padding: '2px 8px' }}>&times;</button>
         </div>
       )}
-    <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 16 }}>
+    <div className="grid-2col" style={{ gridTemplateColumns: '360px 1fr' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="card">
           <div className="card-header">
@@ -269,25 +271,26 @@ function LongTermPanel() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div
+                className="list-item-card"
                 style={{
-                  padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
-                  background: !filterUser ? 'var(--accent-dim)' : 'var(--bg-secondary)',
-                  border: `1px solid ${!filterUser ? 'var(--border-accent)' : 'var(--border)'}`,
+                  padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                  background: !filterUser ? 'var(--accent-dim)' : undefined,
+                  borderColor: !filterUser ? 'var(--border-accent)' : undefined,
                 }}
                 onClick={() => setFilterUser('')}
               >All users</div>
               {users.map((u) => (
                 <div
                   key={u.user_id}
+                  className="list-item-card"
                   style={{
-                    padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
-                    background: filterUser === u.user_id ? 'var(--accent-dim)' : 'var(--bg-secondary)',
-                    border: `1px solid ${filterUser === u.user_id ? 'var(--border-accent)' : 'var(--border)'}`,
-                    transition: 'all 0.2s',
+                    padding: '8px 12px', cursor: 'pointer',
+                    background: filterUser === u.user_id ? 'var(--accent-dim)' : undefined,
+                    borderColor: filterUser === u.user_id ? 'var(--border-accent)' : undefined,
                   }}
                   onClick={() => { setFilterUser(u.user_id); setUserId(u.user_id) }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{u.user_id}</div>
+                  <div className="td-mono-bold" style={{ fontSize: 12 }}>{u.user_id}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {u.memory_count} memories
                   </div>
@@ -312,10 +315,7 @@ function LongTermPanel() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {memories.map((m) => (
-              <div key={m.memory_id} style={{
-                padding: '12px 16px', borderRadius: 8,
-                background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-              }}>
+              <div key={m.memory_id} className="list-item-card" style={{ padding: '12px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                   <div>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{m.topic}</span>
@@ -351,6 +351,7 @@ export default function AgentMemory() {
           conversations) and <strong>long-term</strong> (extracted key-value knowledge across sessions).
         </p>
       </div>
+      <LabBanner pageId="agent" />
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {TABS.map((t) => (

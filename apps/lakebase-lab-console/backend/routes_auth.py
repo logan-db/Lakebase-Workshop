@@ -4,23 +4,23 @@ import base64
 import json
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from .db import execute_query, get_project_id, get_schema
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.get("/credential")
-def generate_credential():
+def generate_credential(user: UserContext = Depends(get_current_user)):
     """Generate an OAuth database credential and decode its JWT payload."""
     try:
         from databricks.sdk import WorkspaceClient
 
         w = WorkspaceClient()
-        project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-        branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
-
-        if not project_id:
-            raise HTTPException(400, "LAKEBASE_PROJECT_ID not configured")
+        project_id = get_project_id(user)
+        branch_id = user.branch_id
 
         endpoints = list(
             w.postgres.list_endpoints(
@@ -55,12 +55,10 @@ def generate_credential():
 
 
 @router.get("/roles")
-def list_roles():
+def list_roles(user: UserContext = Depends(get_current_user)):
     """List PostgreSQL roles (filtered)."""
     try:
-        from backend.db import execute_query
-
-        rows = execute_query("""
+        rows = execute_query(user, """
             SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin
             FROM pg_roles
             WHERE rolname NOT LIKE 'pg_%%' AND rolname != 'rdsadmin'
@@ -72,13 +70,12 @@ def list_roles():
 
 
 @router.get("/grants")
-def list_grants():
+def list_grants(user: UserContext = Depends(get_current_user)):
     """List table grants for the configured schema."""
     try:
-        from backend.db import execute_query
-
-        schema = os.getenv("LAKEBASE_SCHEMA", "public")
+        schema = get_schema(user)
         rows = execute_query(
+            user,
             """
             SELECT grantee, privilege_type, table_name
             FROM information_schema.table_privileges
@@ -93,20 +90,18 @@ def list_grants():
 
 
 @router.get("/connection-info")
-def connection_info():
+def connection_info(user: UserContext = Depends(get_current_user)):
     """Return connection details for external tools."""
     try:
         from databricks.sdk import WorkspaceClient
 
-        project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-        branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
-        pghost = os.getenv("PGHOST", "")
+        project_id = get_project_id(user)
+        branch_id = user.branch_id
 
-        host = pghost
-        username = os.getenv("PGUSER", "")
-
-        if not host and project_id:
-            w = WorkspaceClient()
+        w = WorkspaceClient()
+        sp_username = os.getenv("PGUSER") or os.getenv("DATABRICKS_CLIENT_ID", "")
+        host = ""
+        if project_id:
             endpoints = list(
                 w.postgres.list_endpoints(
                     parent=f"projects/{project_id}/branches/{branch_id}"
@@ -115,13 +110,12 @@ def connection_info():
             if endpoints:
                 ep = w.postgres.get_endpoint(name=endpoints[0].name)
                 host = ep.status.hosts.host
-            username = username or w.current_user.me().user_name
 
         return {
             "host": host or "N/A",
             "port": 5432,
-            "database": os.getenv("PGDATABASE", "databricks_postgres"),
-            "username": username or "N/A",
+            "database": "databricks_postgres",
+            "username": sp_username,
             "ssl_mode": "require",
             "project_id": project_id,
             "branch_id": branch_id,

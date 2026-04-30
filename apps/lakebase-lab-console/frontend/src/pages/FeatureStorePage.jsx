@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Database, RefreshCw, Table, Server, Activity, AlertCircle, ChevronRight, Layers } from '../icons'
+import LabBanner from '../LabBanner'
 
 export default function FeatureStorePage() {
   const [tab, setTab] = useState('stores')
@@ -60,17 +61,16 @@ export default function FeatureStorePage() {
           </button>
         </div>
       </div>
+      <LabBanner pageId="feature-store" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
-            <p style={{ color: 'var(--danger)' }}>{error}</p>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
         </div>
       )}
 
-      <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+      <div className="metrics-row metrics-row-2">
         <div className="metric-card">
           <div className="metric-icon"><Server size={18} /></div>
           <div className="metric-value">{onlineStores.length}</div>
@@ -111,7 +111,7 @@ export default function FeatureStorePage() {
             </label>
           </div>
           {loading ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+            <div className="empty-state empty-state-compact"><p>Loading...</p></div>
           ) : onlineStores.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Server size={36} /></div>
@@ -133,31 +133,31 @@ fe.publish_table(
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {onlineStores.map((s, i) => (
-                <div key={i} style={{ padding: 18, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                <div key={i} className="list-item-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 14 }}>{s.store_id || s.name}</span>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span className="td-mono-bold" style={{ fontSize: 14 }}>{s.store_id || s.name}</span>
+                    <div className="btn-row">
                       {s.capacity && <span className="badge badge-purple" style={{ fontSize: 10 }}>{s.capacity}</span>}
                       {s.state && <span className={`badge ${stateColor(s.state)}`}>{s.state}</span>}
                     </div>
                   </div>
                   {s.read_write_dns && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    <div className="td-mono-sm" style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
                       <Server size={12} style={{ verticalAlign: -2 }} /> <code style={{ color: 'var(--accent)', fontSize: 11 }}>{s.read_write_dns}</code>
                     </div>
                   )}
                   {s.source_table && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    <div className="td-mono-sm" style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
                       <Database size={12} style={{ verticalAlign: -2 }} /> Source: <code style={{ color: 'var(--accent)' }}>{s.source_table}</code>
                     </div>
                   )}
                   {s.primary_key_columns && s.primary_key_columns.length > 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      PK: {s.primary_key_columns.map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
+                    <div className="td-mono-sm" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                      PK: {s.primary_key_columns.map(k => <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}
                     </div>
                   )}
                   {s.creator && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Created by: {s.creator}</div>
+                    <div className="td-mono-xs" style={{ color: 'var(--text-muted)', marginTop: 4 }}>Created by: {s.creator}</div>
                   )}
                 </div>
               ))}
@@ -173,7 +173,7 @@ fe.publish_table(
             <h3><Table size={16} /> Unity Catalog Online Table Specs</h3>
           </div>
           {loading ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+            <div className="empty-state empty-state-compact"><p>Loading...</p></div>
           ) : featureSpecs.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Table size={36} /></div>
@@ -187,9 +187,9 @@ fe.publish_table(
               <tbody>
                 {featureSpecs.map((f, i) => (
                   <tr key={i}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{f.name}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{f.source_table || '--'}</td>
-                    <td>{(f.primary_key_columns || []).map(k => <span key={k} className="badge badge-teal" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}</td>
+                    <td className="td-mono-bold">{f.name}</td>
+                    <td className="td-mono-sm">{f.source_table || '--'}</td>
+                    <td>{(f.primary_key_columns || []).map(k => <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}</span>)}</td>
                     <td><span className={`badge ${stateColor(f.state)}`}>{f.state || '--'}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       {f.run_continuously ? 'Continuous' : f.run_triggered ? 'Triggered' : 'Snapshot'}

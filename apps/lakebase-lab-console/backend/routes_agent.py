@@ -1,10 +1,11 @@
 """Agent memory lab routes: short-term (session/message) and long-term (memory store) CRUD."""
 
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from .db import execute_query, execute_write
+from .user_context import UserContext, get_current_user
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -52,9 +53,10 @@ class MemoryInfo(BaseModel):
 
 
 @router.get("/sessions", response_model=list[SessionInfo])
-def list_sessions(limit: int = 20):
+def list_sessions(limit: int = 20, user: UserContext = Depends(get_current_user)):
     """List recent agent sessions with message counts."""
     rows = execute_query(
+        user,
         """
         SELECT s.session_id, s.agent_name, s.metadata, s.created_at::text as created_at,
                COALESCE(m.cnt, 0) as message_count
@@ -73,12 +75,13 @@ def list_sessions(limit: int = 20):
 
 
 @router.post("/sessions", response_model=SessionInfo)
-def create_session(req: CreateSessionRequest):
+def create_session(req: CreateSessionRequest, user: UserContext = Depends(get_current_user)):
     """Create a new agent session."""
     session_id = str(uuid.uuid4())[:12]
     import json
 
     execute_write(
+        user,
         "INSERT INTO agent_sessions (session_id, agent_name, metadata) VALUES (%s, %s, %s)",
         (session_id, req.agent_name, json.dumps(req.metadata)),
     )
@@ -92,9 +95,10 @@ def create_session(req: CreateSessionRequest):
 
 
 @router.delete("/sessions/{session_id}")
-def delete_session(session_id: str):
+def delete_session(session_id: str, user: UserContext = Depends(get_current_user)):
     """Delete a session and all its messages (cascading)."""
     result = execute_write(
+        user,
         "DELETE FROM agent_sessions WHERE session_id = %s", (session_id,)
     )
     if result[0].get("rowcount", 0) == 0:
@@ -103,9 +107,10 @@ def delete_session(session_id: str):
 
 
 @router.get("/sessions/{session_id}/messages")
-def get_messages(session_id: str):
+def get_messages(session_id: str, user: UserContext = Depends(get_current_user)):
     """Get all messages in a session, ordered chronologically."""
     return execute_query(
+        user,
         """
         SELECT message_id, session_id, role, content, metadata,
                created_at::text as created_at
@@ -118,23 +123,26 @@ def get_messages(session_id: str):
 
 
 @router.post("/sessions/{session_id}/messages")
-def append_message(session_id: str, req: AppendMessageRequest):
+def append_message(session_id: str, req: AppendMessageRequest, user: UserContext = Depends(get_current_user)):
     """Append a message to a session."""
     import json
 
     sessions = execute_query(
+        user,
         "SELECT 1 FROM agent_sessions WHERE session_id = %s", (session_id,)
     )
     if not sessions:
         raise HTTPException(404, "Session not found")
 
     result = execute_write(
+        user,
         "INSERT INTO agent_messages (session_id, role, content, metadata) "
         "VALUES (%s, %s, %s, %s) RETURNING *",
         (session_id, req.role, req.content, json.dumps(req.metadata)),
     )
 
     execute_write(
+        user,
         "UPDATE agent_sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = %s",
         (session_id,),
     )
@@ -146,10 +154,11 @@ def append_message(session_id: str, req: AppendMessageRequest):
 
 
 @router.get("/memories", response_model=list[MemoryInfo])
-def list_memories(user_id: str | None = None, limit: int = 50):
+def list_memories(user_id: str | None = None, limit: int = 50, user: UserContext = Depends(get_current_user)):
     """List long-term memories, optionally filtered by user_id."""
     if user_id:
         rows = execute_query(
+            user,
             """
             SELECT memory_id, user_id, topic, memory, metadata,
                    created_at::text as created_at, updated_at::text as updated_at
@@ -162,6 +171,7 @@ def list_memories(user_id: str | None = None, limit: int = 50):
         )
     else:
         rows = execute_query(
+            user,
             """
             SELECT memory_id, user_id, topic, memory, metadata,
                    created_at::text as created_at, updated_at::text as updated_at
@@ -175,11 +185,12 @@ def list_memories(user_id: str | None = None, limit: int = 50):
 
 
 @router.post("/memories", response_model=MemoryInfo)
-def upsert_memory(req: UpsertMemoryRequest):
+def upsert_memory(req: UpsertMemoryRequest, user: UserContext = Depends(get_current_user)):
     """Create or update a long-term memory (upsert on user_id + topic)."""
     import json
 
     rows = execute_write(
+        user,
         """
         INSERT INTO agent_memory_store (user_id, topic, memory, metadata)
         VALUES (%s, %s, %s, %s)
@@ -196,9 +207,10 @@ def upsert_memory(req: UpsertMemoryRequest):
 
 
 @router.delete("/memories/{memory_id}")
-def delete_memory(memory_id: int):
+def delete_memory(memory_id: int, user: UserContext = Depends(get_current_user)):
     """Delete a long-term memory by ID."""
     result = execute_write(
+        user,
         "DELETE FROM agent_memory_store WHERE memory_id = %s", (memory_id,)
     )
     if result[0].get("rowcount", 0) == 0:
@@ -207,9 +219,10 @@ def delete_memory(memory_id: int):
 
 
 @router.get("/memories/users")
-def list_memory_users():
+def list_memory_users(user: UserContext = Depends(get_current_user)):
     """List all users who have long-term memories."""
     return execute_query(
+        user,
         """
         SELECT user_id, COUNT(*) as memory_count,
                MAX(updated_at)::text as last_updated

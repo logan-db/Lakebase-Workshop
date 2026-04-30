@@ -72,6 +72,7 @@ import uuid, json
 
 conn = get_connection()
 print(f"✓ Connected to {PROJECT_ID} / production")
+show_app_link("agent", "Agent Memory")
 
 # COMMAND ----------
 

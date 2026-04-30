@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { useAppContext } from '../App'
+import { getNotebookUrl, NOTEBOOK_MAP } from '../LabBanner'
 import {
   Zap, GitBranch, Database, TrendingUp, Activity,
   Server, Bot, RefreshCw, Terminal,
-  ExternalLink, Cpu, Table, Layers, Key, Shield
+  ExternalLink, Cpu, Table, Layers, Key, Shield, BookOpen
 } from '../icons'
 
 function cleanState(raw) {
@@ -12,8 +14,37 @@ function cleanState(raw) {
   return dot >= 0 ? raw.slice(dot + 1) : raw
 }
 
+function QuickActionCard({ pageId, Icon, title, desc, onNavigate, config }) {
+  const nbUrl = getNotebookUrl(config, pageId)
+  return (
+    <div className="quick-action-card-wrap">
+      <button
+        className="quick-action-card"
+        onClick={() => onNavigate(pageId)}
+        aria-label={`Open ${title}`}
+      >
+        <div className="qa-icon"><Icon size={20} /></div>
+        <div className="qa-title">{title}</div>
+        <div className="qa-desc">{desc}</div>
+      </button>
+      {nbUrl && (
+        <a
+          className="qa-notebook-link"
+          href={nbUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open ${NOTEBOOK_MAP[pageId]?.label} notebook`}
+          onClick={e => e.stopPropagation()}
+        >
+          <BookOpen size={12} /> Notebook
+        </a>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard({ onNavigate }) {
-  const [health, setHealth] = useState(null)
+  const ctx = useAppContext()
   const [config, setConfig] = useState(null)
   const [dbStatus, setDbStatus] = useState(null)
   const [stats, setStats] = useState({})
@@ -24,7 +55,6 @@ export default function Dashboard({ onNavigate }) {
   const load = () => {
     setLoading(true)
     Promise.allSettled([
-      api.health().then(setHealth),
       api.config().then(setConfig),
       api.dbtest().then(setDbStatus).catch((e) => setDbStatus({ db_connected: false, error: e.message })),
       api.tableStats().then(setStats).catch(() => setStats({})),
@@ -48,39 +78,64 @@ export default function Dashboard({ onNavigate }) {
             <p>Lakebase Autoscaling project overview and health</p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={loading ? 'icon-spin' : ''} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
 
       {/* Status Banner */}
-      <div className={`status-banner ${connected ? 'status-healthy' : 'status-error'}`}>
-        <div className="status-banner-left">
-          <span className={`pulse-dot ${connected ? 'pulse-green' : 'pulse-red'}`} />
-          <div>
-            <div className="status-banner-title">
-              {connected ? 'Lakebase Connected' : 'Lakebase Disconnected'}
-            </div>
-            <div className="status-banner-detail">
-              {config?.project_id || 'No project configured'}
-              {ep.state && <> &middot; Compute: {cleanState(ep.state)}</>}
-            </div>
-            {!connected && dbStatus?.error && (
-              <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4, maxWidth: 500, wordBreak: 'break-word' }}>
-                {dbStatus.error}
+      {dbStatus?.needs_setup ? (
+        <div className="status-banner status-error">
+          <div className="status-banner-left">
+            <span className="pulse-dot pulse-red" />
+            <div>
+              <div className="status-banner-title">
+                Lakebase Project Not Found
               </div>
+              <div className="status-banner-detail">
+                Run the setup notebook (<strong>00_Setup_Lakebase_Project</strong>) to create your
+                Lakebase project and seed your schema. Once complete, refresh this page.
+              </div>
+              <div className="setup-hint">
+                Expected project: {config?.project_id || 'unknown'}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className={`status-banner ${connected ? 'status-healthy' : 'status-error'}`}>
+          <div className="status-banner-left">
+            <span className={`pulse-dot ${connected ? 'pulse-green' : 'pulse-red'}`} />
+            <div>
+              <div className="status-banner-title">
+                {connected ? 'Lakebase Connected' : 'Lakebase Disconnected'}
+              </div>
+              <div className="status-banner-detail">
+                {config?.project_id || 'No project configured'}
+                {ep.state && <> &middot; Compute: {cleanState(ep.state)}</>}
+              </div>
+              {!connected && dbStatus?.error && (
+                <div className="error-detail">
+                  {dbStatus.error}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="status-banner-right">
+            <span className="badge badge-info" title="Branch">{config?.branch_id || 'production'}</span>
+            <span className="badge badge-cyan" title="Schema">{config?.schema || '...'}</span>
+            {config?.user_email && (
+              <span className="badge badge-info" title={config.user_email}>
+                {config.user_email.split('@')[0]}
+              </span>
             )}
           </div>
         </div>
-        <div className="status-banner-right">
-          <span className="badge badge-info">{config?.branch_id || 'production'}</span>
-          <span className="badge badge-teal">{config?.schema || '...'}</span>
-        </div>
-      </div>
+      )}
 
       {/* Key Metrics */}
-      <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="metrics-row metrics-row-4">
         <div className="metric-card">
           <div className="metric-icon"><Zap size={18} /></div>
           <div className="metric-value">{ep.min_cu ?? '--'}-{ep.max_cu ?? '--'}</div>
@@ -104,13 +159,14 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       {/* Table Stats + Endpoint */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-2col">
         <div className="card">
           <div className="card-header">
             <h3><Database size={16} /> Table Overview</h3>
           </div>
           {Object.keys(stats).length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}>
+            <div className="empty-state">
+              <div className="empty-icon"><Table size={28} /></div>
               <p>{connected ? 'Loading table stats...' : 'Connect to Lakebase to view tables'}</p>
             </div>
           ) : (
@@ -137,10 +193,10 @@ export default function Dashboard({ onNavigate }) {
             <h3><Server size={16} /> Endpoint Details</h3>
           </div>
           {ep.name ? (
-            <div style={{ fontSize: 13 }}>
+            <div>
               <div className="detail-row">
                 <span className="detail-label">Endpoint</span>
-                <span className="detail-value">{ep.name?.split('/').pop()}</span>
+                <span className="detail-value detail-value-mono">{ep.name?.split('/').pop()}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">State</span>
@@ -150,31 +206,32 @@ export default function Dashboard({ onNavigate }) {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Type</span>
-                <span className="detail-value">{ep.endpoint_type?.replace(/^.*\./, '') || '--'}</span>
+                <span className="detail-value detail-value-mono">{ep.endpoint_type?.replace(/^.*\./, '') || '--'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Autoscaling</span>
-                <span className="detail-value">{ep.min_cu ?? '--'} - {ep.max_cu ?? '--'} CU</span>
+                <span className="detail-value detail-value-mono">{ep.min_cu ?? '--'} - {ep.max_cu ?? '--'} CU</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Memory</span>
-                <span className="detail-value">{ep.min_cu != null ? `${(ep.min_cu * 2).toFixed(0)}-${(ep.max_cu * 2).toFixed(0)} GB` : '--'}</span>
+                <span className="detail-value detail-value-mono">{ep.min_cu != null ? `${(ep.min_cu * 2).toFixed(0)}-${(ep.max_cu * 2).toFixed(0)} GB` : '--'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Host</span>
-                <span className="detail-value" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{ep.host || '--'}</span>
+                <span className="detail-value detail-value-mono">{ep.host || '--'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Database</span>
-                <span className="detail-value">{dbStatus?.info?.db || config?.database || 'databricks_postgres'}</span>
+                <span className="detail-value detail-value-mono">{dbStatus?.info?.db || config?.database || 'databricks_postgres'}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">PG Version</span>
-                <span className="detail-value" style={{ fontSize: 12 }}>{dbStatus?.info?.version?.split('(')[0]?.trim() || '--'}</span>
+                <span className="detail-value detail-value-mono">{dbStatus?.info?.version?.split('(')[0]?.trim() || '--'}</span>
               </div>
             </div>
           ) : (
-            <div className="empty-state" style={{ padding: 20 }}>
+            <div className="empty-state">
+              <div className="empty-icon"><Server size={28} /></div>
               <p>No endpoint data available</p>
             </div>
           )}
@@ -184,69 +241,42 @@ export default function Dashboard({ onNavigate }) {
       {/* Quick Actions */}
       <div className="card">
         <div className="card-header">
-          <h3>Quick Actions</h3>
+          <h3>Labs</h3>
+          <span className="badge badge-info">
+            Available in app and as notebooks
+          </span>
         </div>
         <div className="quick-actions-grid">
-          <button className="quick-action-card" onClick={() => onNavigate('autoscale')}>
-            <div className="qa-icon"><TrendingUp size={20} /></div>
-            <div className="qa-title">Autoscale Demo</div>
-            <div className="qa-desc">Spike traffic and watch compute scale in real time</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('branches')}>
-            <div className="qa-icon"><GitBranch size={20} /></div>
-            <div className="qa-title">Branch Manager</div>
-            <div className="qa-desc">Create, review, and delete database branches</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('data')}>
-            <div className="qa-icon"><Database size={20} /></div>
-            <div className="qa-title">Data Ops</div>
-            <div className="qa-desc">CRUD operations, JSONB queries, audit log</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('agent')}>
-            <div className="qa-icon"><Bot size={20} /></div>
-            <div className="qa-title">Agent Memory</div>
-            <div className="qa-desc">Persistent AI agent session and message storage</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('observability')}>
-            <div className="qa-icon"><Activity size={20} /></div>
-            <div className="qa-title">Observability</div>
-            <div className="qa-desc">PostgreSQL diagnostics, pg_stat views, connection pool</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('sync')}>
-            <div className="qa-icon"><RefreshCw size={20} /></div>
-            <div className="qa-title">Reverse ETL</div>
-            <div className="qa-desc">Sync Delta tables to Lakebase and back to Unity Catalog</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('feature-store')}>
-            <div className="qa-icon"><Layers size={20} /></div>
-            <div className="qa-title">Feature Store</div>
-            <div className="qa-desc">ML feature serving with online stores backed by Lakebase</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('auth')}>
-            <div className="qa-icon"><Key size={20} /></div>
-            <div className="qa-title">Auth & Permissions</div>
-            <div className="qa-desc">OAuth credentials, JWT tokens, roles, and grants</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('backup')}>
-            <div className="qa-icon"><Shield size={20} /></div>
-            <div className="qa-title">Backup & Recovery</div>
-            <div className="qa-desc">Branch snapshots, PITR, disaster recovery</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('compute')}>
-            <div className="qa-icon"><Cpu size={20} /></div>
-            <div className="qa-title">Compute Config</div>
-            <div className="qa-desc">Configure compute CU limits and view endpoints</div>
-          </button>
-          <button className="quick-action-card" onClick={() => onNavigate('api')}>
-            <div className="qa-icon"><Terminal size={20} /></div>
-            <div className="qa-title">API Tester</div>
-            <div className="qa-desc">Execute raw API calls against Lakebase</div>
-          </button>
-          <a className="quick-action-card" href="https://docs.databricks.com/aws/en/oltp/projects/" target="_blank" rel="noopener noreferrer">
-            <div className="qa-icon"><ExternalLink size={20} /></div>
-            <div className="qa-title">Lakebase Docs</div>
-            <div className="qa-desc">Official Databricks Lakebase documentation</div>
-          </a>
+          <QuickActionCard pageId="autoscale" Icon={TrendingUp} title="Autoscale Demo" desc="Spike traffic and watch compute scale in real time" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="branches" Icon={GitBranch} title="Branch Manager" desc="Create, review, and delete database branches" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="data" Icon={Database} title="Data Ops" desc="CRUD operations, JSONB queries, audit log" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="agent" Icon={Bot} title="Agent Memory" desc="Persistent AI agent session and message storage" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="observability" Icon={Activity} title="Observability" desc="PostgreSQL diagnostics, pg_stat views, connection pool" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="sync" Icon={RefreshCw} title="Reverse ETL" desc="Sync Delta tables to Lakebase and back to Unity Catalog" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="feature-store" Icon={Layers} title="Feature Store" desc="ML feature serving with online stores backed by Lakebase" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="auth" Icon={Key} title="Auth & Permissions" desc="OAuth credentials, JWT tokens, roles, and grants" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="backup" Icon={Shield} title="Backup & Recovery" desc="Branch snapshots, PITR, disaster recovery" onNavigate={onNavigate} config={ctx?.config} />
+          <QuickActionCard pageId="compute" Icon={Cpu} title="Compute Config" desc="Configure compute CU limits and view endpoints" onNavigate={onNavigate} config={ctx?.config} />
+          <div className="quick-action-card-wrap">
+            <button className="quick-action-card" onClick={() => onNavigate('api')} aria-label="Open API Tester">
+              <div className="qa-icon"><Terminal size={20} /></div>
+              <div className="qa-title">API Tester</div>
+              <div className="qa-desc">Execute raw API calls against Lakebase</div>
+            </button>
+          </div>
+          <div className="quick-action-card-wrap">
+            <a
+              className="quick-action-card"
+              href="https://docs.databricks.com/aws/en/oltp/projects/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open Lakebase documentation (external)"
+            >
+              <div className="qa-icon"><ExternalLink size={20} /></div>
+              <div className="qa-title">Lakebase Docs</div>
+              <div className="qa-desc">Official Databricks Lakebase documentation</div>
+            </a>
+          </div>
         </div>
       </div>
     </div>

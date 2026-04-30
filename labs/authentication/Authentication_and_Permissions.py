@@ -32,6 +32,7 @@ dbutils.library.restartPython()
 import json, base64
 
 ENDPOINT_NAME = get_endpoint_name()
+show_app_link("auth", "Auth & Permissions")
 
 # COMMAND ----------
 

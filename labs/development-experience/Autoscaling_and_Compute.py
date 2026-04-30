@@ -33,6 +33,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 from databricks.sdk.service.postgres import Endpoint, EndpointSpec, EndpointType, FieldMask
+show_app_link("autoscale", "Autoscale Demo")
 
 # COMMAND ----------
 

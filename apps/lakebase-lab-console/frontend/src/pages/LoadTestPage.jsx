@@ -11,6 +11,15 @@ export default function LoadTestPage() {
   const [error, setError] = useState(null)
   const pollRef = useRef(null)
 
+  useEffect(() => {
+    api.activeLoadTest()
+      .then((s) => {
+        setTestId(s.test_id)
+        setMetrics(s)
+      })
+      .catch(() => {})
+  }, [])
+
   const startTest = async () => {
     setStarting(true)
     setError(null)
@@ -60,14 +69,12 @@ export default function LoadTestPage() {
       </div>
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
-            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
-              <X size={14} />
-            </button>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+          <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setError(null)}>
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -104,7 +111,7 @@ export default function LoadTestPage() {
             disabled={metrics?.running}
           />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="btn-row">
           {!metrics?.running ? (
             <button className="btn btn-primary" onClick={startTest} disabled={starting}>
               <Play size={14} />

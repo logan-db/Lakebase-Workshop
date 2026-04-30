@@ -3,8 +3,9 @@ import { api } from '../api'
 import {
   Sun, Flame, Zap, Sparkles, Activity, Server,
   Play, Square, Settings, Clock, AlertCircle, RefreshCw, X, Trash2,
-  Database, Cpu, ArrowUpRight, Boxes
+  Database, Cpu, ArrowUpRight, Boxes, Search
 } from '../icons'
+import LabBanner from '../LabBanner'
 
 function cleanState(raw) {
   if (!raw) return 'unknown'
@@ -56,6 +57,15 @@ export default function AutoscaleDemo() {
   }, [])
 
   useEffect(() => { loadCompute() }, [loadCompute])
+
+  useEffect(() => {
+    api.activeLoadTest()
+      .then((s) => {
+        setTestId(s.test_id)
+        setMetrics(s)
+      })
+      .catch(() => {})
+  }, [])
 
   const startTest = async (preset) => {
     const config = preset || form
@@ -142,16 +152,15 @@ export default function AutoscaleDemo() {
           The autoscaler adjusts CU allocation based on workload demand.
         </p>
       </div>
+      <LabBanner pageId="autoscale" />
 
       {error && (
-        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlertCircle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-            <p style={{ color: 'var(--danger)', flex: 1 }}>{error}</p>
-            <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
-              <X size={14} /> Dismiss
-            </button>
-          </div>
+        <div className="alert-banner alert-banner-danger">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+          <button className="btn btn-sm btn-secondary" onClick={() => setError(null)}>
+            <X size={14} /> Dismiss
+          </button>
         </div>
       )}
 
@@ -166,7 +175,7 @@ export default function AutoscaleDemo() {
             {isRunning && <span className="badge badge-accent" style={{ animation: 'pulse 2s infinite' }}>MONITORING</span>}
           </div>
         </div>
-        <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 8 }}>
+        <div className="metrics-row metrics-row-4" style={{ marginBottom: 8 }}>
           <div className="metric-card">
             <div className="metric-value">{ep.min_cu ?? '--'}</div>
             <div className="metric-label">Min CU</div>
@@ -229,7 +238,7 @@ export default function AutoscaleDemo() {
                   <span className={`spike-preset-icon ${p.colorClass}`}><p.Icon size={22} /></span>
                   <span className="spike-preset-label">{p.label}</span>
                   <span className="spike-preset-desc">{p.desc}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  <span className="spike-preset-desc">
                     {p.concurrency} workers &middot; {Math.round(p.write_ratio * 100)}% writes
                   </span>
                 </button>
@@ -247,7 +256,7 @@ export default function AutoscaleDemo() {
             </div>
 
             {showCustom && (
-              <div style={{ marginTop: 14, padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <div className="form-inset" style={{ marginTop: 14 }}>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Concurrent Workers</label>
@@ -293,20 +302,20 @@ export default function AutoscaleDemo() {
 
         {/* Active test config summary */}
         {isRunning && metrics && (
-          <div style={{ marginTop: 12, padding: 14, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', display: 'flex', gap: 24, fontSize: 13, flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{metrics.concurrency}</strong> workers
+          <div className="running-config">
+            <span className="text-muted">
+              <strong>{metrics.concurrency}</strong> workers
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{metrics.write_batch_size || 100}</strong> rows/insert
+            <span className="text-muted">
+              <strong>{metrics.write_batch_size || 100}</strong> rows/insert
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
+            <span className="text-muted">
               <strong style={{ color: 'var(--accent)' }}>{Math.round((metrics.write_ratio || 0) * 100)}%</strong> writes
               {' / '}
               <strong style={{ color: 'var(--blue)' }}>{Math.round((1 - (metrics.write_ratio || 0)) * 100)}%</strong> reads
             </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              Elapsed: <strong style={{ color: 'var(--text-primary)' }}>{metrics.elapsed_seconds}s</strong>
+            <span className="text-muted">
+              Elapsed: <strong>{metrics.elapsed_seconds}s</strong>
             </span>
           </div>
         )}
@@ -316,7 +325,7 @@ export default function AutoscaleDemo() {
       {metrics && (
         <>
           {/* Row throughput */}
-          <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="metrics-row metrics-row-4">
             <div className="metric-card">
               <div className="metric-value" style={{ color: 'var(--accent)' }}>
                 {fmtRows(metrics.rows_written || 0)}
@@ -342,7 +351,7 @@ export default function AutoscaleDemo() {
           </div>
 
           {/* Latency + health */}
-          <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="metrics-row metrics-row-4">
             <div className="metric-card">
               <div className="metric-value">{metrics.avg_latency_ms}</div>
               <div className="metric-label">Avg Latency (ms)</div>
@@ -368,18 +377,53 @@ export default function AutoscaleDemo() {
           {/* Read / Write Breakdown */}
           <div className="card">
             <div className="card-header">
-              <h3><Database size={16} /> Read / Write Breakdown</h3>
+              <h3><Database size={16} /> Query Breakdown</h3>
               <span className="badge badge-purple">{metrics.total_queries.toLocaleString()} total queries</span>
             </div>
             <div className="rw-breakdown">
               <div className="rw-section">
                 <div className="rw-header">
-                  <span className="rw-dot read" />
-                  <span className="rw-title">Reads</span>
-                  <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Full-Table Scans</span>
+                  <span className="rw-dot" style={{ background: 'var(--teal)' }} />
+                  <span className="rw-title">Point Lookups</span>
+                  <span className="badge badge-success" style={{ marginLeft: 'auto' }}>PK Index</span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Aggregations, GROUP BY, and range scans on <code style={{ color: 'var(--blue)' }}>events</code> that force sequential scans and push CPU
+                  Single-row fetches by primary key (<code style={{ color: 'var(--teal)' }}>SELECT ... WHERE event_id = ?</code>) — the core OLTP read pattern. Should show low, stable latency regardless of table size.
+                </p>
+                <div className="rw-stats">
+                  <div>
+                    <div className="rw-stat-value" style={{ color: 'var(--teal)' }}>{(metrics.lookup_queries || 0).toLocaleString()}</div>
+                    <div className="rw-stat-label">Queries</div>
+                  </div>
+                  <div>
+                    <div className="rw-stat-value" style={{ color: 'var(--teal)', fontSize: metrics.lookup_avg_latency_ms < 10 ? 28 : undefined, fontWeight: metrics.lookup_avg_latency_ms < 10 ? 700 : undefined }}>{metrics.lookup_avg_latency_ms || 0}</div>
+                    <div className="rw-stat-label">Avg Latency (ms)</div>
+                  </div>
+                  <div>
+                    <div className="rw-stat-value" style={{ color: metrics.lookup_avg_latency_ms > 0 && metrics.read_avg_latency_ms > 0 ? 'var(--teal)' : 'var(--text-secondary)' }}>
+                      {metrics.lookup_avg_latency_ms > 0 && metrics.read_avg_latency_ms > 0
+                        ? `${Math.round(metrics.read_avg_latency_ms / metrics.lookup_avg_latency_ms)}x`
+                        : '--'}
+                    </div>
+                    <div className="rw-stat-label">Faster than Scans</div>
+                  </div>
+                </div>
+                <div className="rw-bar-track">
+                  <div className="rw-bar-fill" style={{ background: 'var(--teal)', width: `${metrics.total_queries > 0 ? ((metrics.lookup_queries || 0) / metrics.total_queries * 100) : 0}%` }} />
+                </div>
+                {(metrics.lookup_errors || 0) > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{metrics.lookup_errors} errors</div>
+                )}
+              </div>
+
+              <div className="rw-section">
+                <div className="rw-header">
+                  <span className="rw-dot read" />
+                  <span className="rw-title">Scan Reads</span>
+                  <span className="badge badge-info" style={{ marginLeft: 'auto' }}>Aggregations</span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Analytical queries: aggregations, window functions, and full-table scans on <code style={{ color: 'var(--blue)' }}>events</code> to push CPU and trigger autoscaling
                 </p>
                 <div className="rw-stats">
                   <div>
@@ -437,7 +481,7 @@ export default function AutoscaleDemo() {
           </div>
 
           {/* QPS + Latency Charts */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div className="grid-2col">
             <div className="card">
               <div className="card-header">
                 <h3><Activity size={16} /> Throughput (QPS)</h3>
@@ -449,7 +493,7 @@ export default function AutoscaleDemo() {
               </div>
               <div className="chart-area" style={{ minHeight: 160 }}>
                 {history.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 16 }}><p>Waiting for data...</p></div>
+                  <div className="empty-state empty-state-compact"><p>Waiting for data...</p></div>
                 ) : (
                   history.map((h, i) => (
                     <div className="chart-bar-row" key={i} style={{ marginBottom: Math.max(1, 4 - Math.floor(history.length / 20)) }}>
@@ -472,7 +516,7 @@ export default function AutoscaleDemo() {
               </div>
               <div className="chart-area" style={{ minHeight: 160 }}>
                 {history.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 16 }}><p>Waiting for data...</p></div>
+                  <div className="empty-state empty-state-compact"><p>Waiting for data...</p></div>
                 ) : (
                   history.map((h, i) => (
                     <div className="chart-bar-row" key={i} style={{ marginBottom: Math.max(1, 4 - Math.floor(history.length / 20)) }}>
@@ -503,7 +547,7 @@ export default function AutoscaleDemo() {
               </div>
 
               {/* DB metrics summary */}
-              <div className="metrics-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+              <div className="metrics-row metrics-row-4" style={{ marginBottom: 16 }}>
                 <div className="metric-card">
                   <div className="metric-value" style={{ color: 'var(--accent)' }}>
                     {computeHistory[computeHistory.length - 1].connections}
@@ -534,7 +578,7 @@ export default function AutoscaleDemo() {
 
               {/* Connections chart */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   Active DB Connections Over Time
                 </div>
                 <div className="compute-timeline">
@@ -561,7 +605,7 @@ export default function AutoscaleDemo() {
 
               {/* Transactions/sec chart */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   Transactions per Interval (3s)
                 </div>
                 <div className="compute-timeline">
@@ -587,7 +631,7 @@ export default function AutoscaleDemo() {
 
               {/* State change log */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                <div className="section-subheader">
                   State Changes
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -614,7 +658,7 @@ export default function AutoscaleDemo() {
           })()}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div className="btn-row" style={{ marginBottom: 16 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => api.clearLoadtestEvents()}>
               <Trash2 size={14} /> Clear Test Events
             </button>
@@ -633,11 +677,28 @@ export default function AutoscaleDemo() {
               <h3><Boxes size={16} /> What Happens When You Send a Spike</h3>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
-              Each preset spawns concurrent async workers that fire <strong>heavy queries</strong> using connection pooling.
-              Writes batch-insert hundreds of rows per statement (plus audit trigger overhead). Reads run full-table
-              aggregations and scans that push CPU utilization high enough to trigger autoscaling.
+              Each preset spawns concurrent async workers that fire a mix of <strong>point lookups</strong>, <strong>analytical scans</strong>, and <strong>batch writes</strong> using connection pooling.
+              Point lookups show Lakebase's OLTP strength (low-ms PK reads), while scans and writes push CPU high enough to trigger autoscaling.
             </p>
             <div className="explainer-grid">
+              <div className="explainer-item">
+                <div className="explainer-icon" style={{ background: 'var(--teal-dim)', color: 'var(--teal)' }}>
+                  <Search size={18} />
+                </div>
+                <div className="explainer-text">
+                  <h4>Point Lookups (PK Index)</h4>
+                  <p>Half of read workers do single-row <code>SELECT ... WHERE event_id = ?</code> fetches. These hit the primary key B-tree index and return in 1-5 ms regardless of table size — the core OLTP pattern.</p>
+                </div>
+              </div>
+              <div className="explainer-item">
+                <div className="explainer-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
+                  <Database size={18} />
+                </div>
+                <div className="explainer-text">
+                  <h4>Scan Reads (Analytical)</h4>
+                  <p>The other half run aggregations, window functions, and bounded scans on <code>events</code> to push CPU. These are intentionally heavier to contrast with point lookup latency and trigger autoscaling.</p>
+                </div>
+              </div>
               <div className="explainer-item">
                 <div className="explainer-icon" style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}>
                   <ArrowUpRight size={18} />
@@ -648,30 +709,12 @@ export default function AutoscaleDemo() {
                 </div>
               </div>
               <div className="explainer-item">
-                <div className="explainer-icon" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
-                  <Database size={18} />
-                </div>
-                <div className="explainer-text">
-                  <h4>Heavy Reads (CPU-Intensive)</h4>
-                  <p>Reads cycle through random sorts, md5 hashing, window functions, percentiles, and JSONB ops that hammer CPU and memory on every row in <code>events</code>.</p>
-                </div>
-              </div>
-              <div className="explainer-item">
-                <div className="explainer-icon" style={{ background: 'var(--teal-dim)', color: 'var(--teal)' }}>
-                  <Activity size={18} />
-                </div>
-                <div className="explainer-text">
-                  <h4>Connection Pooling</h4>
-                  <p>Persistent connections are reused across queries (no per-query SSL handshake). Latency reflects query execution time, not connection overhead.</p>
-                </div>
-              </div>
-              <div className="explainer-item">
                 <div className="explainer-icon" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
                   <Cpu size={18} />
                 </div>
                 <div className="explainer-text">
                   <h4>Autoscaler Triggers</h4>
-                  <p>Lakebase monitors <strong>CPU load</strong>, <strong>memory usage</strong>, and <strong>working set size</strong>. Large JSONB payloads grow the working set beyond RAM, random sorts spike CPU, and concurrent batch writes push memory — triggering scale-up.</p>
+                  <p>Lakebase monitors <strong>CPU load</strong>, <strong>memory usage</strong>, and <strong>working set size</strong>. Watch how point lookup latency stays stable even as scans slow down — then both improve as the autoscaler adds compute.</p>
                 </div>
               </div>
             </div>

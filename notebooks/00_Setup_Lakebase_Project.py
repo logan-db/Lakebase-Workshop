@@ -247,9 +247,70 @@ conn.close()
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Step 6: Grant the Lab Console App Access
+# MAGIC
+# MAGIC The shared Lab Console app uses a **Service Principal** (SP) to connect to
+# MAGIC every participant's Lakebase project. This step creates a PostgreSQL role
+# MAGIC for the SP and grants it access to your schema.
+# MAGIC
+# MAGIC This is required because:
+# MAGIC - The app's SP credentials have the `postgres` OAuth scope (forwarded user tokens do not)
+# MAGIC - Each user must explicitly grant the SP access to their project/schema
+# MAGIC - The SP connects as itself, but routes queries to your schema based on your email
+
+# COMMAND ----------
+
+app_name = "lakebase-lab-console"
+try:
+    app_info = w.apps.get(name=app_name)
+    sp_id = getattr(app_info, 'effective_service_principal_client_id', None) or app_info.service_principal_client_id
+    print(f"App: {app_name}")
+    print(f"SP Client ID: {sp_id}")
+except Exception as e:
+    print(f"⚠ Could not look up app '{app_name}': {e}")
+    print("  If the app hasn't been deployed yet, you can run this step later")
+    print("  from the App Deployment lab (labs/app-deployment/).")
+    sp_id = None
+
+# COMMAND ----------
+
+if sp_id:
+    cred = w.postgres.generate_database_credential(endpoint=endpoint.name)
+    params["password"] = cred.token
+    grant_conn = psycopg.connect(**params)
+
+    with grant_conn.cursor() as cur:
+        try:
+            cur.execute(f"SELECT databricks_create_role('{sp_id}', 'service_principal')")
+            print(f"✓ Created OAuth role for SP: {sp_id}")
+        except Exception as e:
+            if 'already exists' in str(e):
+                grant_conn.rollback()
+                print(f"✓ OAuth role already exists for SP: {sp_id}")
+            else:
+                raise
+
+        cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+        cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_id}"')
+        cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_id}"')
+        print(f"✓ Granted SP access to schema: {PG_SCHEMA}")
+
+    grant_conn.commit()
+    grant_conn.close()
+else:
+    print("Skipping SP grants (app not found). Run this step later from the App Deployment lab.")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## ✓ Setup Complete!
 # MAGIC
-# MAGIC Your Lakebase project is ready. Here's your configuration:
+# MAGIC Your Lakebase project is ready. The shared **Lab Console** app will
+# MAGIC automatically connect to your project when you log in.
+# MAGIC
+# MAGIC The SP grant above allows the app to query your data on your behalf.
 
 # COMMAND ----------
 
@@ -262,11 +323,13 @@ print(f"  Host:          {endpoint.status.hosts.host}")
 print(f"  Database:      databricks_postgres")
 print(f"  Schema:        {PG_SCHEMA}")
 print(f"  Username:      {user_email}")
+if sp_id:
+    print(f"  App SP:        {sp_id} (granted)")
 print("=" * 60)
 print()
-print(f"  For app.yaml:")
-print(f"    LAKEBASE_PROJECT_ID: {PROJECT_ID}")
-print(f"    LAKEBASE_SCHEMA:     {PG_SCHEMA}")
+print("  Open the Lab Console app (Compute → Apps → lakebase-lab-console)")
+print("  to explore your data. The app routes each user to their own")
+print("  Lakebase project automatically.")
 
 # COMMAND ----------
 

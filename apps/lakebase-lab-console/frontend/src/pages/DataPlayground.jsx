@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { Database, Plus, Trash2, RefreshCw, Check, Table, Clock, AlertCircle, Edit3, X, Search, Zap } from '../icons'
+import LabBanner from '../LabBanner'
 
 const DEFAULT_PRODUCTS = [
   { name: 'Wireless Mouse', price: 29.99, stock_quantity: 150, category: 'Electronics', description: 'Ergonomic wireless mouse with USB receiver', tags: ['wireless', 'ergonomic'] },
@@ -153,6 +154,7 @@ export default function DataPlayground() {
           custom values, edit inline, run JSONB/array queries, and manage events.
         </p>
       </div>
+      <LabBanner pageId="data" />
 
       <div className="metrics-row">
         {Object.entries(stats).map(([table, count]) => (
@@ -185,7 +187,7 @@ export default function DataPlayground() {
           <div className="card">
             <div className="card-header">
               <h3><Database size={16} /> Products ({products.length})</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="btn-row">
                 <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
                   <Plus size={14} /> Add Product
                 </button>
@@ -198,10 +200,10 @@ export default function DataPlayground() {
             {showAdd && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
+                  <div className="section-subheader">
                     Quick Fill from Examples
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div className="btn-row" style={{ flexWrap: 'wrap' }}>
                     {DEFAULT_PRODUCTS.map((p, i) => (
                       <button key={i} className="btn btn-secondary btn-xs" onClick={() => fillDefault(p)}>
                         <Zap size={11} /> {p.name}
@@ -209,7 +211,7 @@ export default function DataPlayground() {
                     ))}
                   </div>
                 </div>
-                <form onSubmit={handleAdd} style={{ padding: 18, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                <form onSubmit={handleAdd} className="form-inset">
                   <div className="form-row">
                     <div className="form-group">
                       <label>Name</label>
@@ -241,7 +243,7 @@ export default function DataPlayground() {
                     <label>Description</label>
                     <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" />
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="btn-row">
                     <button className="btn btn-primary"><Check size={14} /> Save Product</button>
                     <button type="button" className="btn btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
                   </div>
@@ -250,7 +252,7 @@ export default function DataPlayground() {
             )}
 
             {loading ? (
-              <div className="empty-state" style={{ padding: 20 }}><p>Loading...</p></div>
+              <div className="empty-state empty-state-compact"><p>Loading...</p></div>
             ) : products.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon"><Database size={36} /></div>
@@ -268,18 +270,18 @@ export default function DataPlayground() {
                     <tr key={p.product_id}>
                       {editingId === p.product_id ? (
                         <>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.product_id}</td>
-                          <td><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} style={{ width: '100%', padding: '4px 8px', background: 'var(--bg-inset)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font)' }} /></td>
-                          <td><input type="number" step="0.01" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} style={{ width: 90, padding: '4px 8px', background: 'var(--bg-inset)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }} /></td>
-                          <td><input type="number" value={editForm.stock_quantity} onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value })} style={{ width: 70, padding: '4px 8px', background: 'var(--bg-inset)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }} /></td>
+                          <td className="td-mono" style={{ color: 'var(--text-muted)' }}>{p.product_id}</td>
+                          <td><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="form-select" style={{ width: '100%', borderColor: 'var(--border-accent)' }} /></td>
+                          <td><input type="number" step="0.01" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })} className="form-select td-mono" style={{ width: 90, borderColor: 'var(--border-accent)' }} /></td>
+                          <td><input type="number" value={editForm.stock_quantity} onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value })} className="form-select td-mono" style={{ width: 70, borderColor: 'var(--border-accent)' }} /></td>
                           <td>
-                            <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} style={{ padding: '4px 8px', background: 'var(--bg-inset)', border: '1px solid var(--border-accent)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font)' }}>
+                            <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className="form-select" style={{ borderColor: 'var(--border-accent)', fontSize: 12 }}>
                               <option>Electronics</option><option>Books</option><option>Accessories</option><option>Office</option><option>General</option>
                             </select>
                           </td>
                           <td></td>
                           <td style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
                               <button className="btn btn-primary btn-xs" onClick={handleSaveEdit}><Check size={12} /> Save</button>
                               <button className="btn btn-secondary btn-xs" onClick={() => setEditingId(null)}><X size={12} /></button>
                             </div>
@@ -287,9 +289,9 @@ export default function DataPlayground() {
                         </>
                       ) : (
                         <>
-                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.product_id}</td>
+                          <td className="td-mono" style={{ color: 'var(--text-muted)' }}>{p.product_id}</td>
                           <td style={{ fontWeight: 600 }}>{p.name}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)' }}>${parseFloat(p.price).toFixed(2)}</td>
+                          <td className="td-mono">${parseFloat(p.price).toFixed(2)}</td>
                           <td>
                             <span className={`badge ${p.stock_quantity > 50 ? 'badge-success' : p.stock_quantity > 0 ? 'badge-warning' : 'badge-danger'}`}>
                               {p.stock_quantity}
@@ -300,14 +302,14 @@ export default function DataPlayground() {
                             {p.tags && p.tags.length > 0 && (
                               <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                                 {p.tags.slice(0, 3).map((t, i) => (
-                                  <span key={i} className="badge badge-teal" style={{ fontSize: 10 }}>{t}</span>
+                                  <span key={i} className="badge badge-cyan" style={{ fontSize: 10 }}>{t}</span>
                                 ))}
                                 {p.tags.length > 3 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{p.tags.length - 3}</span>}
                               </div>
                             )}
                           </td>
                           <td style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            <div className="btn-row" style={{ justifyContent: 'flex-end' }}>
                               <button className="btn btn-secondary btn-xs" onClick={() => handleEdit(p)}>
                                 <Edit3 size={12} /> Edit
                               </button>
@@ -347,9 +349,9 @@ export default function DataPlayground() {
               </div>
               <div className="form-group">
                 <label>Payload (JSON)</label>
-                <textarea rows={3} value={eventForm.payload} onChange={(e) => setEventForm({ ...eventForm, payload: e.target.value })} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+                <textarea rows={3} value={eventForm.payload} onChange={(e) => setEventForm({ ...eventForm, payload: e.target.value })} className="td-mono-sm" />
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="btn-row">
                 <button className="btn btn-primary btn-sm"><Plus size={14} /> Create Event</button>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => api.clearLoadtestEvents().then(() => { showToast('Load test events cleared'); loadEvents(); loadStats() })}>
                   <Trash2 size={14} /> Clear Load Test Events
@@ -364,7 +366,7 @@ export default function DataPlayground() {
               <button className="btn btn-secondary btn-sm btn-icon" onClick={loadEvents}><RefreshCw size={14} /></button>
             </div>
             {events.length === 0 ? (
-              <div className="empty-state" style={{ padding: 20 }}><p>No events yet</p></div>
+              <div className="empty-state empty-state-compact"><p>No events yet</p></div>
             ) : (
               <table className="data-table">
                 <thead>
@@ -373,13 +375,13 @@ export default function DataPlayground() {
                 <tbody>
                   {events.slice(0, 50).map((e) => (
                     <tr key={e.event_id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{e.event_id}</td>
+                      <td className="td-mono" style={{ color: 'var(--text-muted)' }}>{e.event_id}</td>
                       <td><span className="badge badge-info">{e.event_type}</span></td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{e.source}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td className="td-mono-sm">{e.source}</td>
+                      <td className="td-mono-xs" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {typeof e.payload === 'object' ? JSON.stringify(e.payload) : e.payload}
                       </td>
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{e.created_at}</td>
+                      <td className="td-mono-sm" style={{ color: 'var(--text-secondary)' }}>{e.created_at}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -396,7 +398,7 @@ export default function DataPlayground() {
             <div className="card-header">
               <h3><Search size={16} /> JSONB & Array Query Examples</h3>
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            <div className="btn-row" style={{ flexWrap: 'wrap', marginBottom: 16 }}>
               {JSONB_QUERIES.map((q, i) => (
                 <button key={i} className="btn btn-secondary btn-sm" onClick={() => { setCustomQuery(q.sql); runQuery(q.sql) }}>
                   <Zap size={12} /> {q.label}
@@ -405,7 +407,7 @@ export default function DataPlayground() {
             </div>
             <div className="form-group">
               <label>Custom SQL Query</label>
-              <textarea rows={4} value={customQuery} onChange={(e) => setCustomQuery(e.target.value)} placeholder="SELECT * FROM products WHERE ..." style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+              <textarea rows={4} value={customQuery} onChange={(e) => setCustomQuery(e.target.value)} placeholder="SELECT * FROM products WHERE ..." className="td-mono-sm" />
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => runQuery(customQuery)} disabled={queryLoading || !customQuery.trim()}>
               {queryLoading ? 'Running...' : <><Search size={14} /> Run Query</>}
@@ -434,7 +436,7 @@ export default function DataPlayground() {
                       {queryResult.data.slice(0, 50).map((row, i) => (
                         <tr key={i}>
                           {Object.values(row).map((val, j) => (
-                            <td key={j} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                            <td key={j} className="td-mono-sm">
                               {val === null ? <span style={{ color: 'var(--text-muted)' }}>NULL</span> : typeof val === 'object' ? JSON.stringify(val) : String(val)}
                             </td>
                           ))}
@@ -444,7 +446,7 @@ export default function DataPlayground() {
                   </table>
                 </div>
               ) : (
-                <div className="empty-state" style={{ padding: 20 }}><p>Query returned no rows</p></div>
+                <div className="empty-state empty-state-compact"><p>Query returned no rows</p></div>
               )}
               <div className="code-block" style={{ marginTop: 12, fontSize: 11 }}>{queryResult.sql}</div>
             </div>
@@ -462,7 +464,7 @@ export default function DataPlayground() {
             </button>
           </div>
           {audit.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}><p>No audit entries yet. Create, edit, or delete a product to generate entries.</p></div>
+            <div className="empty-state empty-state-compact"><p>No audit entries yet. Create, edit, or delete a product to generate entries.</p></div>
           ) : (
             <table className="data-table">
               <thead>
@@ -470,16 +472,16 @@ export default function DataPlayground() {
               </thead>
               <tbody>
                 {audit.map((a) => (
-                  <tr key={a.audit_id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{a.audit_id}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{a.table_name}</td>
+                    <tr key={a.audit_id}>
+                      <td className="td-mono" style={{ color: 'var(--text-muted)' }}>{a.audit_id}</td>
+                      <td className="td-mono">{a.table_name}</td>
                     <td>
                       <span className={`badge ${a.operation === 'INSERT' ? 'badge-success' : a.operation === 'DELETE' ? 'badge-danger' : 'badge-warning'}`}>
                         {a.operation}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{a.record_id}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{a.created_at}</td>
+                    <td className="td-mono">{a.record_id}</td>
+                    <td className="td-mono-sm" style={{ color: 'var(--text-secondary)' }}>{a.created_at}</td>
                   </tr>
                 ))}
               </tbody>

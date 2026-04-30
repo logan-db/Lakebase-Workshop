@@ -25,3 +25,6 @@ Thumbs.db
 .bundle/
 
 *.log
+
+DESIGN.md
+DESIGN.json

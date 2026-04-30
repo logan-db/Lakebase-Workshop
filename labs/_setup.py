@@ -131,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_user ON {schema}.agent_memory_store(user_i
 CREATE INDEX IF NOT EXISTS idx_products_category ON {schema}.products(category);
 CREATE INDEX IF NOT EXISTS idx_products_tags ON {schema}.products USING GIN(tags);
 CREATE INDEX IF NOT EXISTS idx_audit_table ON {schema}.audit_log(table_name);
+CREATE INDEX IF NOT EXISTS idx_audit_record ON {schema}.audit_log(record_id);
 """
 
 def _ensure_schema(conn, branch):
@@ -165,6 +166,31 @@ def get_endpoint_name(branch="production"):
     """Get the full endpoint resource name for a branch."""
     return f"projects/{PROJECT_ID}/branches/{branch}/endpoints/primary"
 
+WORKSPACE_HOST = w.config.host.rstrip("/") if w.config.host else ""
+APP_NAME = "lakebase-lab-console"
+APP_URL = f"{WORKSPACE_HOST}/apps/{APP_NAME}" if WORKSPACE_HOST else ""
+
+def show_app_link(page_id, label=None):
+    """Render a banner linking to the corresponding Lab Console app page."""
+    if not APP_URL:
+        return
+    url = f"{APP_URL}#{page_id}"
+    title = label or page_id.replace("-", " ").title()
+    displayHTML(f"""
+    <div style="padding:10px 16px;margin:8px 0;border-radius:8px;background:#e8f0fe;border:1px solid #aecbfa;display:flex;align-items:center;gap:12px;font-family:Inter,sans-serif">
+      <span style="font-size:20px">🖥️</span>
+      <div style="flex:1">
+        <strong style="color:#1a73e8">Try it in the Lab Console</strong>
+        <span style="color:#3c4043;margin-left:8px">This lab is also available as an interactive UI.</span>
+      </div>
+      <a href="{url}" target="_blank" style="background:#1a73e8;color:#fff;padding:6px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none">
+        Open {title} →
+      </a>
+    </div>
+    """)
+
 print(f"Project: {PROJECT_ID}")
 print(f"Schema:  {PG_SCHEMA}")
 print(f"User:    {user_email}")
+if APP_URL:
+    print(f"Lab App: {APP_URL}")

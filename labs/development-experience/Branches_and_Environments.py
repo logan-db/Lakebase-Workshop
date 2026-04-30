@@ -33,6 +33,7 @@ dbutils.library.restartPython()
 
 import time
 from databricks.sdk.service.postgres import Branch, BranchSpec, Duration
+show_app_link("branches", "Branch Manager")
 
 # COMMAND ----------
 

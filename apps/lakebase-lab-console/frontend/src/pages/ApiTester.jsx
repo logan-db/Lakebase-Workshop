@@ -71,7 +71,7 @@ export default function ApiTester() {
         <div className="card-header">
           <h3><Terminal size={16} /> Presets</h3>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="btn-row" style={{ flexWrap: 'wrap' }}>
           {PRESETS.map((p) => (
             <button key={p.label} className="btn btn-secondary btn-sm" onClick={() => applyPreset(p)}>
               <span className={`badge ${p.method === 'GET' ? 'badge-success' : 'badge-warning'}`}>{p.method}</span>
@@ -106,7 +106,7 @@ export default function ApiTester() {
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder='{"key": "value"}'
-              style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+              className="td-mono-sm"
             />
           </div>
         )}

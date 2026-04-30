@@ -6,9 +6,12 @@
 # MAGIC
 # MAGIC **Lakebase feature:** Full-stack app using Lakebase as the backend
 # MAGIC
-# MAGIC This notebook walks you through deploying the **Lakebase Lab Console** —
-# MAGIC an interactive React + FastAPI application that ties together every feature
-# MAGIC from the workshop labs into a single UI.
+# MAGIC This notebook walks through the patterns for connecting a **Databricks App**
+# MAGIC to **Lakebase** — including Service Principal authentication, OAuth credential
+# MAGIC generation, token refresh, and schema-level access grants.
+# MAGIC
+# MAGIC Every code cell is a **reusable reference pattern** you can adapt for your
+# MAGIC own applications.
 # MAGIC
 # MAGIC **Docs:** [Connect an application](https://docs.databricks.com/aws/en/oltp/projects/connect-application) |
 # MAGIC [Databricks Apps tutorial](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling)
@@ -25,112 +28,52 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Prerequisites
+# MAGIC ## Architecture: SP Auth + Email Routing
 # MAGIC
-# MAGIC 1. **`setup.sh` was run** — this deploys all notebooks, labs, and the Lab Console app via a Databricks Asset Bundle
-# MAGIC 2. **Notebook `00` was run** — your Lakebase project exists and your user schema is seeded
-# MAGIC 3. **Lakebase database added as app resource** — after notebook 00, add the postgres resource to the app
-# MAGIC    (Compute → Apps → lakebase-lab-console → Edit → Add Resource → Database)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Deployment
+# MAGIC The Lab Console is deployed **once** by the workshop facilitator and shared
+# MAGIC by all participants. When you open the app, it automatically connects to
+# MAGIC **your** Lakebase project using the app's Service Principal.
 # MAGIC
-# MAGIC If you ran `setup.sh` and chose **Yes** when prompted to deploy, the Lab Console
-# MAGIC app is already deployed to your workspace via the Declarative Automation Bundle.
+# MAGIC ### How it works
 # MAGIC
-# MAGIC To redeploy or deploy manually, run from the **repo root**:
-# MAGIC
-# MAGIC ```bash
-# MAGIC databricks bundle deploy --target dev
+# MAGIC ```
+# MAGIC Browser (React Lab Console)
+# MAGIC     |
+# MAGIC     v
+# MAGIC Databricks App Proxy
+# MAGIC     |  (injects X-Forwarded-Email header)
+# MAGIC     v
+# MAGIC FastAPI Backend
+# MAGIC     |
+# MAGIC     +---> Read user email → derive project ID (lakebase-lab-<you>)
+# MAGIC     |
+# MAGIC     +---> App SP (WorkspaceClient) → generate DB credential for YOUR project
+# MAGIC     |
+# MAGIC     +---> psycopg → connect as SP to YOUR Lakebase project
+# MAGIC     |         (search_path = your schema)
+# MAGIC     v
+# MAGIC Your Lakebase Project (lakebase-lab-<your-username>)
 # MAGIC ```
 # MAGIC
-# MAGIC Then open the app: **Compute → Apps → lakebase-lab-console**
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## App Configuration Reference
+# MAGIC ### Key design decisions
 # MAGIC
-# MAGIC The app uses `app.yaml` for its configuration:
+# MAGIC | Decision | Details |
+# MAGIC |----------|---------|
+# MAGIC | **SP authentication** | The app's Service Principal performs all SDK calls and DB connections — it has the required `postgres` OAuth scope (forwarded user tokens do not) |
+# MAGIC | **Email-based routing** | The `X-Forwarded-Email` header determines which project/schema to connect to — each user sees only their own data |
+# MAGIC | **Per-user SP grants** | Each user must grant the SP access to their project (done in setup notebook or below) |
+# MAGIC | **Per-project credential caching** | DB credentials are cached for 45 min per project (tokens expire at 60 min) |
+# MAGIC | **Graceful fallback** | If a user hasn't run `00_Setup`, the Dashboard shows a friendly setup prompt |
 # MAGIC
-# MAGIC ```yaml
-# MAGIC command:
-# MAGIC   - python
-# MAGIC   - -m
-# MAGIC   - uvicorn
-# MAGIC   - app:app
-# MAGIC   - --host
-# MAGIC   - 0.0.0.0
-# MAGIC   - --port
-# MAGIC   - "8000"
-# MAGIC env:
-# MAGIC   - name: LAKEBASE_PROJECT_ID
-# MAGIC     value: <your-project-id>
-# MAGIC   - name: LAKEBASE_BRANCH_ID
-# MAGIC     value: production
-# MAGIC   - name: LAKEBASE_SCHEMA
-# MAGIC     value: <your-schema>   # same as PG_SCHEMA from notebook 00 (e.g. lakebase_lab_<username>)
-# MAGIC resources:
-# MAGIC   - name: lakebase-db
-# MAGIC     type: postgres
-# MAGIC ```
+# MAGIC ### Why SP auth instead of user token passthrough?
 # MAGIC
-# MAGIC After running notebook `00`, update `LAKEBASE_PROJECT_ID` and `LAKEBASE_SCHEMA` in `app.yaml` with
-# MAGIC your project ID and schema (same values as `PROJECT_ID` / `PG_SCHEMA` printed in the setup notebook).
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Service Principal Permissions
+# MAGIC Databricks Apps injects a forwarded user token (`x-forwarded-access-token`),
+# MAGIC but this token **does not include the `postgres` OAuth scope**. Without it,
+# MAGIC Lakebase SDK calls (`list_endpoints`, `generate_database_credential`) fail.
 # MAGIC
-# MAGIC When the app deploys, Databricks creates a Service Principal (SP) to run it.
-# MAGIC You must create an OAuth-enabled Postgres role for the SP and grant it access
-# MAGIC to your Lakebase tables.
-# MAGIC
-# MAGIC 1. Find the SP's `client_id` — the code cell below retrieves it automatically via the SDK,
-# MAGIC    or you can find it manually in the App Environment tab (`DATABRICKS_CLIENT_ID`)
-# MAGIC 2. Run the setup below to create the OAuth role and grant permissions
-# MAGIC
-# MAGIC ### Where to run the SQL
-# MAGIC
-# MAGIC You can execute these SQL statements from:
-# MAGIC
-# MAGIC - **Lakebase SQL Editor** — open the SQL editor in the Databricks UI for your Lakebase instance
-# MAGIC - **This notebook** — use the code cell below if you're connected to the Lakebase instance
-# MAGIC - **psql / any PostgreSQL client** — connect with your endpoint host and credentials
-# MAGIC
-# MAGIC ### Step 1: Create the OAuth role
-# MAGIC
-# MAGIC The `databricks_auth` extension enables OAuth authentication so the SP can
-# MAGIC connect using Databricks-managed tokens instead of passwords.
-# MAGIC See [Connect a Databricks App to Lakebase](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
-# MAGIC
-# MAGIC ```sql
-# MAGIC CREATE EXTENSION IF NOT EXISTS databricks_auth;
-# MAGIC SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');
-# MAGIC ```
-# MAGIC
-# MAGIC ### Step 2: Grant schema and object access
-# MAGIC
-# MAGIC ```sql
-# MAGIC GRANT ALL ON SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA <your_schema> TO "<SP_CLIENT_ID>";
-# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA <your_schema>
-# MAGIC   GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
-# MAGIC ```
-# MAGIC
-# MAGIC Both steps can be run from the **Lakebase SQL Editor**, **this notebook** (code cell below),
-# MAGIC or any PostgreSQL client connected to the instance.
-# MAGIC
-# MAGIC > **Troubleshooting:** If the app shows "password authentication failed" and the
-# MAGIC > Lakebase Roles UI shows **"No login"** for the SP, the OAuth role was not created
-# MAGIC > properly. Run `SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');`
-# MAGIC > to fix it.
-# MAGIC
-# MAGIC See `docs/PERMISSIONS.md` for the full permission model.
+# MAGIC The app's Service Principal gets the `postgres` scope automatically when a
+# MAGIC Lakebase database resource is attached to the app via `app.yaml`. This is
+# MAGIC why we use SP auth for all Lakebase operations.
 
 # COMMAND ----------
 
@@ -142,64 +85,356 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %run ../_setup
+import re
+from databricks.sdk import WorkspaceClient
+
+w = WorkspaceClient()
+user_email = w.current_user.me().user_name
+
+def sanitize(email):
+    name = email.split("@")[0]
+    name = re.sub(r"[^a-z0-9-]", "-", name.lower())
+    return re.sub(r"-+", "-", name).strip("-")
+
+PROJECT_ID = f"lakebase-lab-{sanitize(user_email)}"
+PG_SCHEMA  = f"lakebase_lab_{sanitize(user_email).replace('-', '_')}"
+
+print(f"User:       {user_email}")
+print(f"Project ID: {PROJECT_ID}")
+print(f"PG Schema:  {PG_SCHEMA}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Look up the SP client ID
+# MAGIC ## Pattern 1: Look Up an App's Service Principal
+# MAGIC
+# MAGIC Every Databricks App has a dedicated Service Principal. When you attach a
+# MAGIC Lakebase database resource to the app, the SP gets the `postgres` OAuth
+# MAGIC scope and a PostgreSQL role is created for it automatically.
+# MAGIC
+# MAGIC **Use this pattern when:** You need to grant an app's SP access to a
+# MAGIC specific schema or table in your Lakebase project.
 
 # COMMAND ----------
 
-APP_NAME = "lakebase-lab-console"
+app_name = "lakebase-lab-console"
+app_info = w.apps.get(name=app_name)
+sp_id = getattr(app_info, 'effective_service_principal_client_id', None) or app_info.service_principal_client_id
 
-app = w.apps.get(name=APP_NAME)
-sp = w.service_principals.get(id=app.service_principal_id)
-SP_CLIENT_ID = sp.application_id
-
-print(f"App:          {APP_NAME}")
-print(f"SP Name:      {sp.display_name}")
-print(f"SP Client ID: {SP_CLIENT_ID}")
+print(f"App:          {app_name}")
+print(f"SP Client ID: {sp_id}")
+print(f"SP Name:      {getattr(app_info, 'service_principal_name', 'N/A')}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Create OAuth role and grant permissions
+# MAGIC ## Pattern 2: Grant SP Access to a Schema
+# MAGIC
+# MAGIC Lakebase has **two permission layers**:
+# MAGIC
+# MAGIC 1. **Workspace (Unity Catalog)** — controls who can see/manage the project
+# MAGIC 2. **Database (PostgreSQL)** — controls SQL-level access to schemas/tables
+# MAGIC
+# MAGIC When you attach a Lakebase resource to an app, the platform creates the SP's
+# MAGIC PostgreSQL role and grants `CONNECT` + `CREATE` on the database. But you still
+# MAGIC need to grant access to **your specific schema** and its tables.
+# MAGIC
+# MAGIC **Use this pattern when:** You want an app to read/write data in a schema
+# MAGIC it didn't create itself.
+# MAGIC
+# MAGIC ```sql
+# MAGIC -- Create the SP's OAuth role (idempotent — safe to re-run)
+# MAGIC SELECT databricks_create_role('<SP_CLIENT_ID>', 'service_principal');
+# MAGIC
+# MAGIC -- Grant schema-level access
+# MAGIC GRANT ALL ON SCHEMA my_schema TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL TABLES IN SCHEMA my_schema TO "<SP_CLIENT_ID>";
+# MAGIC GRANT ALL ON ALL SEQUENCES IN SCHEMA my_schema TO "<SP_CLIENT_ID>";
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA my_schema GRANT ALL ON TABLES TO "<SP_CLIENT_ID>";
+# MAGIC ALTER DEFAULT PRIVILEGES IN SCHEMA my_schema GRANT ALL ON SEQUENCES TO "<SP_CLIENT_ID>";
+# MAGIC ```
 
 # COMMAND ----------
 
-conn = get_connection()
+import psycopg
+
+endpoints = list(w.postgres.list_endpoints(
+    parent=f"projects/{PROJECT_ID}/branches/production"
+))
+if not endpoints:
+    raise RuntimeError(f"No endpoints found. Run 00_Setup_Lakebase_Project first.")
+
+endpoint = w.postgres.get_endpoint(name=endpoints[0].name)
+cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+
+conn = psycopg.connect(
+    host=endpoint.status.hosts.host,
+    dbname="databricks_postgres",
+    user=user_email,
+    password=cred.token,
+    sslmode="require",
+)
 
 with conn.cursor() as cur:
-    cur.execute("CREATE EXTENSION IF NOT EXISTS databricks_auth")
-    cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (SP_CLIENT_ID,))
-    if cur.fetchone():
-        print(f"OAuth role already exists for SP: {SP_CLIENT_ID}")
-    else:
-        cur.execute(f"SELECT databricks_create_role('{SP_CLIENT_ID}', 'service_principal')")
-        print(f"✓ Created OAuth role for SP: {SP_CLIENT_ID}")
-    cur.execute(f'GRANT ALL ON SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
-    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
-    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA "{PG_SCHEMA}" TO "{SP_CLIENT_ID}"')
-    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{PG_SCHEMA}" GRANT ALL ON TABLES TO "{SP_CLIENT_ID}"')
+    try:
+        cur.execute(f"SELECT databricks_create_role('{sp_id}', 'service_principal')")
+        print(f"✓ Created OAuth role for SP: {sp_id}")
+    except Exception as e:
+        if 'already exists' in str(e):
+            conn.rollback()
+            print(f"✓ OAuth role already exists for SP: {sp_id}")
+        else:
+            raise
+
+    cur.execute(f'GRANT ALL ON SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+    cur.execute(f'GRANT ALL ON ALL TABLES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+    cur.execute(f'GRANT ALL ON ALL SEQUENCES IN SCHEMA {PG_SCHEMA} TO "{sp_id}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON TABLES TO "{sp_id}"')
+    cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {PG_SCHEMA} GRANT ALL ON SEQUENCES TO "{sp_id}"')
+    print(f"✓ Granted SP access to schema: {PG_SCHEMA}")
+
 conn.commit()
 conn.close()
+print(f"\n✓ The Lab Console app can now access your Lakebase project.")
 
-print(f"✓ Granted schema permissions on {PG_SCHEMA} to SP: {SP_CLIENT_ID}")
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Pattern 3: OAuth Credential Generation & Token Refresh
+# MAGIC
+# MAGIC Lakebase uses **OAuth tokens** instead of static passwords. Tokens expire
+# MAGIC after **1 hour**, so your application must handle credential refresh.
+# MAGIC
+# MAGIC The pattern:
+# MAGIC 1. Call `generate_database_credential()` to get a short-lived token
+# MAGIC 2. Use the token as the PostgreSQL password
+# MAGIC 3. Cache the token and refresh before it expires (recommended: refresh at 45 min)
+# MAGIC
+# MAGIC **Use this pattern when:** Building any long-running application that
+# MAGIC connects to Lakebase.
+
+# COMMAND ----------
+
+import time
+
+cred = w.postgres.generate_database_credential(endpoint=endpoint.name)
+
+print(f"Token preview:  {cred.token[:40]}...")
+print(f"Token length:   {len(cred.token)} characters")
+print(f"Expires at:     {cred.expire_time}")
+print(f"Generated at:   {time.strftime('%H:%M:%S')}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Token Refresh Pattern (Python)
+# MAGIC
+# MAGIC Here's the pattern the Lab Console uses for credential caching with
+# MAGIC automatic refresh. Adapt this for any Lakebase-connected application:
+# MAGIC
+# MAGIC ```python
+# MAGIC import time, threading
+# MAGIC from databricks.sdk import WorkspaceClient
+# MAGIC
+# MAGIC REFRESH_INTERVAL = 2700  # 45 minutes (tokens expire at 60 min)
+# MAGIC
+# MAGIC _cache = {}
+# MAGIC _lock = threading.Lock()
+# MAGIC
+# MAGIC def get_db_credential(project_id, branch_id="production"):
+# MAGIC     """Generate or return a cached database credential."""
+# MAGIC     cache_key = f"{project_id}:{branch_id}"
+# MAGIC
+# MAGIC     with _lock:
+# MAGIC         cached = _cache.get(cache_key)
+# MAGIC         if cached:
+# MAGIC             token, timestamp = cached
+# MAGIC             if (time.time() - timestamp) < REFRESH_INTERVAL:
+# MAGIC                 return token  # Still fresh
+# MAGIC
+# MAGIC     # Token expired or not cached — generate a new one
+# MAGIC     w = WorkspaceClient()
+# MAGIC     endpoints = list(w.postgres.list_endpoints(
+# MAGIC         parent=f"projects/{project_id}/branches/{branch_id}"
+# MAGIC     ))
+# MAGIC     cred = w.postgres.generate_database_credential(
+# MAGIC         endpoint=endpoints[0].name
+# MAGIC     )
+# MAGIC
+# MAGIC     with _lock:
+# MAGIC         _cache[cache_key] = (cred.token, time.time())
+# MAGIC
+# MAGIC     return cred.token
+# MAGIC ```
+# MAGIC
+# MAGIC **Key points:**
+# MAGIC - Cache tokens for 45 min (safe margin before 60-min expiry)
+# MAGIC - Use a lock for thread safety in multi-threaded apps (FastAPI, Flask)
+# MAGIC - Key the cache by `project_id:branch_id` so each branch gets its own token
+# MAGIC - The `WorkspaceClient()` in a Databricks App uses SP auth automatically
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Demonstrating Token Refresh
+
+# COMMAND ----------
+
+cred_1 = w.postgres.generate_database_credential(endpoint=endpoint.name)
+time.sleep(2)
+cred_2 = w.postgres.generate_database_credential(endpoint=endpoint.name)
+
+tokens_differ = cred_1.token != cred_2.token
+print(f"Token 1: {cred_1.token[:30]}...")
+print(f"Token 2: {cred_2.token[:30]}...")
+print(f"Tokens are different: {tokens_differ}")
+print(f"\nEach call generates a fresh token. Cache them to avoid unnecessary API calls.")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Pattern 4: Connecting to Lakebase from Application Code
+# MAGIC
+# MAGIC The full connection pattern for a Databricks App backend. This is exactly
+# MAGIC what the Lab Console's `db.py` does:
+# MAGIC
+# MAGIC ```python
+# MAGIC import os
+# MAGIC import psycopg
+# MAGIC from psycopg.rows import dict_row
+# MAGIC from databricks.sdk import WorkspaceClient
+# MAGIC
+# MAGIC def connect_to_lakebase(project_id, schema, branch_id="production"):
+# MAGIC     """Connect to a user's Lakebase project as the app SP."""
+# MAGIC     w = WorkspaceClient()  # Uses SP auth in Databricks Apps
+# MAGIC
+# MAGIC     # Discover the endpoint
+# MAGIC     endpoints = list(w.postgres.list_endpoints(
+# MAGIC         parent=f"projects/{project_id}/branches/{branch_id}"
+# MAGIC     ))
+# MAGIC     ep = w.postgres.get_endpoint(name=endpoints[0].name)
+# MAGIC
+# MAGIC     # Generate a credential (SP authenticates as itself)
+# MAGIC     cred = w.postgres.generate_database_credential(
+# MAGIC         endpoint=endpoints[0].name
+# MAGIC     )
+# MAGIC
+# MAGIC     # The SP's PG username is its client_id
+# MAGIC     sp_username = os.getenv("PGUSER") or os.getenv("DATABRICKS_CLIENT_ID")
+# MAGIC
+# MAGIC     conn = psycopg.connect(
+# MAGIC         host=ep.status.hosts.host,
+# MAGIC         dbname="databricks_postgres",
+# MAGIC         user=sp_username,
+# MAGIC         password=cred.token,
+# MAGIC         sslmode="require",
+# MAGIC         options=f"-c search_path={schema},public",
+# MAGIC         row_factory=dict_row,
+# MAGIC     )
+# MAGIC     return conn
+# MAGIC ```
+# MAGIC
+# MAGIC **Key points:**
+# MAGIC - `WorkspaceClient()` with no arguments uses SP auth (reads `DATABRICKS_CLIENT_ID`/`SECRET` from env)
+# MAGIC - The `search_path` option routes queries to the correct user schema
+# MAGIC - The SP username (`PGUSER`) is set automatically when a postgres resource is attached
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## App Configuration Reference
+# MAGIC
+# MAGIC The `app.yaml` declares a postgres resource (for the SP's OAuth scope)
+# MAGIC and sets the default branch:
+# MAGIC
+# MAGIC ```yaml
+# MAGIC command:
+# MAGIC   - python
+# MAGIC   - -m
+# MAGIC   - uvicorn
+# MAGIC   - app:app
+# MAGIC   - --host
+# MAGIC   - 0.0.0.0
+# MAGIC   - --port
+# MAGIC   - "8000"
+# MAGIC
+# MAGIC env:
+# MAGIC   - name: LAKEBASE_BRANCH_ID
+# MAGIC     value: production
+# MAGIC
+# MAGIC resources:
+# MAGIC   - name: lakebase-db
+# MAGIC     type: postgres
+# MAGIC ```
+# MAGIC
+# MAGIC ### What the `postgres` resource does
+# MAGIC
+# MAGIC | Effect | Details |
+# MAGIC |--------|---------|
+# MAGIC | **Grants `postgres` OAuth scope** | The SP can call `list_endpoints`, `generate_database_credential`, etc. |
+# MAGIC | **Creates PG role** | A PostgreSQL role matching the SP's client_id is created automatically |
+# MAGIC | **Grants `CONNECT` + `CREATE`** | The SP can connect and create schemas in the attached database |
+# MAGIC | **Injects env vars** | `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPORT`, `PGSSLMODE` are set |
+# MAGIC
+# MAGIC ### What you still need to do per user
+# MAGIC
+# MAGIC The resource attachment connects the SP to **one** project (the facilitator's).
+# MAGIC To access other users' projects, each user must run the `GRANT` statements
+# MAGIC from Pattern 2 above.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Deployment (Facilitator Only)
+# MAGIC
+# MAGIC The Lab Console is deployed once for the entire workshop via the
+# MAGIC Declarative Automation Bundle:
+# MAGIC
+# MAGIC ```bash
+# MAGIC # Build the frontend
+# MAGIC cd apps/lakebase-lab-console/frontend
+# MAGIC npm install && npm run build
+# MAGIC cd ../../..
+# MAGIC
+# MAGIC # Deploy everything
+# MAGIC databricks bundle deploy --target dev
+# MAGIC databricks bundle run lakebase_lab_console --target dev
+# MAGIC ```
+# MAGIC
+# MAGIC The app is named `lakebase-lab-console` and is accessible to all
+# MAGIC workspace users: **Compute → Apps → lakebase-lab-console**
+# MAGIC
+# MAGIC After deployment, the facilitator attaches their Lakebase project as a
+# MAGIC postgres resource on the app (done automatically by `setup.sh`). This
+# MAGIC gives the SP the `postgres` OAuth scope needed for Lakebase SDK calls.
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Verify
 # MAGIC
-# MAGIC Once the app is running, open it from **Workspace → Apps** and check
-# MAGIC the health endpoint:
+# MAGIC Open the app from **Compute → Apps → lakebase-lab-console**.
 # MAGIC
-# MAGIC ```
-# MAGIC https://<your-app-url>/health
-# MAGIC ```
+# MAGIC You should see:
+# MAGIC - Your name in the sidebar
+# MAGIC - Your project ID below the app title
+# MAGIC - A green "Connected" status dot
+# MAGIC - Your tables and data from the setup notebook
 # MAGIC
-# MAGIC You should see `{"status": "healthy"}`.
+# MAGIC If you see "Lakebase Project Not Found", run `00_Setup_Lakebase_Project`
+# MAGIC first, then refresh the app.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Patterns Summary
+# MAGIC
+# MAGIC | Pattern | When to Use | Key API |
+# MAGIC |---------|-------------|---------|
+# MAGIC | **SP Lookup** | Find an app's Service Principal ID | `w.apps.get(name=...)` |
+# MAGIC | **Schema Grants** | Grant an SP access to a schema it doesn't own | `databricks_create_role()` + `GRANT` SQL |
+# MAGIC | **Token Refresh** | Any long-running app connecting to Lakebase | `w.postgres.generate_database_credential()` with 45-min cache |
+# MAGIC | **App Connection** | Full connection pattern from a Databricks App | `WorkspaceClient()` + psycopg + `search_path` |
 
 # COMMAND ----------
 
@@ -207,7 +442,8 @@ print(f"✓ Granted schema permissions on {PG_SCHEMA} to SP: {SP_CLIENT_ID}")
 # MAGIC ---
 # MAGIC ## Workshop Complete!
 # MAGIC
-# MAGIC You've deployed a full-stack app backed by Lakebase. Here's a summary of every lab path in the workshop:
+# MAGIC You've explored a full-stack app backed by Lakebase with automatic
+# MAGIC per-user routing. Here's a summary of every lab path in the workshop:
 # MAGIC
 # MAGIC | Path | Lab Folder | Feature |
 # MAGIC |------|-----------|---------|

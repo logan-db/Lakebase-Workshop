@@ -1,14 +1,16 @@
+"""Lakebase connection manager with per-user routing via the app's Service Principal.
+
+The shared Lab Console app uses the app's Service Principal (SP) for all
+Lakebase SDK calls and database connections. The logged-in user's email
+(from Databricks Apps forwarded headers) determines which project and schema
+to connect to — but the SP's credentials are used for the actual connection.
+
+Each user must grant the SP access to their project via the setup notebook.
+
+DB credentials are cached per project for 45 minutes (tokens expire at 60 min).
 """
-Lakebase connection manager with automatic OAuth token refresh.
 
-Supports two modes:
-  1. Databricks App runtime: uses auto-injected PG* env vars + SDK credential generation
-  2. Direct SDK mode: discovers endpoint host from project ID
-
-Provides both single connections and a connection pool for high-throughput workloads.
-"""
-
-import asyncio
+import logging
 import os
 import time
 import threading
@@ -18,152 +20,203 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .user_context import UserContext
 
-_workspace_client = None
-_current_token: str | None = None
-_last_refresh: float = 0
-_TOKEN_REFRESH_INTERVAL = 2700  # 45 minutes (tokens expire at 60 min)
+logger = logging.getLogger(__name__)
+
+_TOKEN_REFRESH_INTERVAL = 2700  # 45 minutes
+
+# Credential cache keyed by project_id:branch_id
+_db_tokens: dict[str, tuple[str, float]] = {}
+_db_tokens_lock = threading.Lock()
 
 _connection_pools: dict[str, ConnectionPool] = {}
 _pool_lock = threading.Lock()
 
+_host_cache: dict[str, str] = {}
+
+# Singleton SP WorkspaceClient
+_sp_client = None
+_sp_client_lock = threading.Lock()
+
 
 def _get_workspace_client():
-    global _workspace_client
-    if _workspace_client is None:
+    """Get or create the app's SP WorkspaceClient (singleton).
+
+    Uses default SDK auth which reads DATABRICKS_HOST, DATABRICKS_CLIENT_ID,
+    and DATABRICKS_CLIENT_SECRET from the environment — set automatically by
+    the Databricks Apps runtime.
+    """
+    global _sp_client
+    if _sp_client is not None:
+        return _sp_client
+
+    with _sp_client_lock:
+        if _sp_client is not None:
+            return _sp_client
+
         from databricks.sdk import WorkspaceClient
-        _workspace_client = WorkspaceClient()
-    return _workspace_client
+        _sp_client = WorkspaceClient()
+        return _sp_client
 
 
-def _refresh_token() -> str:
-    """Generate a fresh database credential token."""
-    global _current_token, _last_refresh
+def _get_sp_username() -> str:
+    """Get the PG username for the SP.
 
-    now = time.time()
-    if _current_token and (now - _last_refresh) < _TOKEN_REFRESH_INTERVAL:
-        return _current_token
+    When connecting to Lakebase as an SP, the username is the SP's client_id.
+    This is set by PGUSER (from postgres resource attachment) or DATABRICKS_CLIENT_ID.
+    """
+    return os.getenv("PGUSER") or os.getenv("DATABRICKS_CLIENT_ID", "")
+
+
+def get_project_id(user: UserContext) -> str:
+    return user.project_id
+
+
+def get_schema(user: UserContext) -> str:
+    return user.schema
+
+
+def _get_db_credential(user: UserContext, branch_id: str | None = None) -> tuple[str, str, str]:
+    """Generate or return cached (host, sp_username, db_token) for a user's project.
+
+    Uses the SP's WorkspaceClient to discover the endpoint and generate
+    a database credential. The SP connects as itself (DATABRICKS_CLIENT_ID),
+    not as the user.
+    """
+    if not branch_id:
+        branch_id = user.branch_id
+
+    cache_key = f"{user.project_id}:{branch_id}"
+    sp_username = _get_sp_username()
+
+    with _db_tokens_lock:
+        cached = _db_tokens.get(cache_key)
+        if cached:
+            token, ts = cached
+            if (time.time() - ts) < _TOKEN_REFRESH_INTERVAL:
+                host = _host_cache.get(cache_key, os.getenv("PGHOST", ""))
+                if host:
+                    return host, sp_username, token
 
     w = _get_workspace_client()
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-    branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
+    project_id = user.project_id
 
-    if project_id:
-        endpoints = list(
-            w.postgres.list_endpoints(
-                parent=f"projects/{project_id}/branches/{branch_id}"
-            )
+    endpoints = list(
+        w.postgres.list_endpoints(
+            parent=f"projects/{project_id}/branches/{branch_id}"
         )
-        endpoint_name = endpoints[0].name if endpoints else None
-        cred = w.postgres.generate_database_credential(endpoint=endpoint_name)
-        _current_token = cred.token
-    else:
-        _current_token = w.config.oauth_token().access_token
-
-    _last_refresh = now
-    return _current_token
-
-
-def _build_conninfo(branch_id: str | None = None) -> str:
-    """Build a libpq connection string."""
-    pghost = os.getenv("PGHOST")
-    pguser = os.getenv("PGUSER")
-    pgdatabase = os.getenv("PGDATABASE", "databricks_postgres")
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
-
-    if not branch_id:
-        branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
-
-    if pghost and pguser:
-        token = _refresh_token()
-        return (
-            f"host={pghost} dbname={pgdatabase} user={pguser} "
-            f"password={token} sslmode=require "
-            f"options=-c\\ search_path={schema},public"
+    )
+    if not endpoints:
+        raise RuntimeError(
+            f"No endpoints found for project '{project_id}' branch '{branch_id}'. "
+            f"Have you run the setup notebook (00_Setup_Lakebase_Project)?"
         )
-    elif project_id:
-        w = _get_workspace_client()
-        endpoints = list(
-            w.postgres.list_endpoints(
-                parent=f"projects/{project_id}/branches/{branch_id}"
-            )
-        )
-        if not endpoints:
-            raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
 
+    ep = w.postgres.get_endpoint(name=endpoints[0].name)
+    host = ep.status.hosts.host
+    cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+
+    with _db_tokens_lock:
+        _db_tokens[cache_key] = (cred.token, time.time())
+
+    _host_cache[cache_key] = host
+
+    return host, sp_username, cred.token
+
+
+def _discover_host(user: UserContext, branch_id: str) -> str:
+    """Look up the cached or discovered endpoint host."""
+    cache_key = f"{user.project_id}:{branch_id}"
+    cached = _host_cache.get(cache_key)
+    if cached:
+        return cached
+
+    w = _get_workspace_client()
+    endpoints = list(
+        w.postgres.list_endpoints(
+            parent=f"projects/{user.project_id}/branches/{branch_id}"
+        )
+    )
+    if endpoints:
         ep = w.postgres.get_endpoint(name=endpoints[0].name)
         host = ep.status.hosts.host
-        cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-        username = w.current_user.me().user_name
-        return (
-            f"host={host} dbname={pgdatabase} user={username} "
-            f"password={cred.token} sslmode=require "
-            f"options=-c\\ search_path={schema},public"
-        )
-    else:
-        raise RuntimeError(
-            "Set PGHOST/PGUSER or LAKEBASE_PROJECT_ID to connect to Lakebase"
-        )
+        _host_cache[cache_key] = host
+        return host
+
+    raise RuntimeError(f"No endpoints for {user.project_id}/{branch_id}")
 
 
-def _get_connection_params(branch_id: str | None = None) -> dict:
-    """Build psycopg connection parameters."""
-    pghost = os.getenv("PGHOST")
-    pguser = os.getenv("PGUSER")
-    pgdatabase = os.getenv("PGDATABASE", "databricks_postgres")
-    project_id = os.getenv("LAKEBASE_PROJECT_ID", "")
-
+def _get_connection_params(user: UserContext, branch_id: str | None = None) -> dict:
+    """Build psycopg connection parameters for a user's project."""
     if not branch_id:
-        branch_id = os.getenv("LAKEBASE_BRANCH_ID", "production")
+        branch_id = user.branch_id
 
-    schema = os.getenv("LAKEBASE_SCHEMA", "public")
+    schema = user.schema
     search_path_opt = f"-c search_path={schema},public"
 
+    # Local dev with PGHOST/PGUSER: use env vars directly
+    pghost = os.getenv("PGHOST") if user._is_local else None
+    pguser = os.getenv("PGUSER") if user._is_local else None
+
     if pghost and pguser:
-        token = _refresh_token()
-        params = {
+        w = _get_workspace_client()
+        try:
+            project_id = user.project_id or os.getenv("LAKEBASE_PROJECT_ID", "")
+            endpoints = list(
+                w.postgres.list_endpoints(
+                    parent=f"projects/{project_id}/branches/{branch_id}"
+                )
+            )
+            if endpoints:
+                cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
+                token = cred.token
+            else:
+                token = w.config.oauth_token().access_token
+        except Exception:
+            token = w.config.oauth_token().access_token
+        return {
             "host": pghost,
-            "dbname": pgdatabase,
+            "dbname": os.getenv("PGDATABASE", "databricks_postgres"),
             "user": pguser,
             "password": token,
             "sslmode": "require",
             "options": search_path_opt,
         }
-    elif project_id:
-        w = _get_workspace_client()
-        endpoints = list(
-            w.postgres.list_endpoints(
-                parent=f"projects/{project_id}/branches/{branch_id}"
-            )
-        )
-        if not endpoints:
-            raise RuntimeError(f"No endpoints for {project_id}/{branch_id}")
 
-        ep = w.postgres.get_endpoint(name=endpoints[0].name)
-        host = ep.status.hosts.host
-        cred = w.postgres.generate_database_credential(endpoint=endpoints[0].name)
-        username = w.current_user.me().user_name
-
-        params = {
-            "host": host,
-            "dbname": pgdatabase,
-            "user": username,
-            "password": cred.token,
-            "sslmode": "require",
-            "options": search_path_opt,
-        }
-    else:
-        raise RuntimeError(
-            "Set PGHOST/PGUSER or LAKEBASE_PROJECT_ID to connect to Lakebase"
-        )
-
-    return params
+    host, username, token = _get_db_credential(user, branch_id)
+    return {
+        "host": host,
+        "dbname": "databricks_postgres",
+        "user": username,
+        "password": token,
+        "sslmode": "require",
+        "options": search_path_opt,
+    }
 
 
-def get_pool(branch_id: str | None = None, min_size: int = 4, max_size: int = 20) -> ConnectionPool:
-    """Get or create a connection pool for the given branch."""
-    key = branch_id or os.getenv("LAKEBASE_BRANCH_ID", "production")
+def _build_conninfo(user: UserContext, branch_id: str | None = None) -> str:
+    """Build a libpq connection string for pool creation."""
+    params = _get_connection_params(user, branch_id)
+    schema = user.schema
+    return (
+        f"host={params['host']} dbname={params['dbname']} user={params['user']} "
+        f"password={params['password']} sslmode=require "
+        f"options=-c\\ search_path={schema},public"
+    )
+
+
+def get_pool(
+    user: UserContext,
+    branch_id: str | None = None,
+    min_size: int = 4,
+    max_size: int = 20,
+) -> ConnectionPool:
+    """Get or create a connection pool for the given user's project and branch."""
+    if not branch_id:
+        branch_id = user.branch_id
+    key = f"{user.project_id}:{branch_id}"
+
     if key in _connection_pools:
         pool = _connection_pools[key]
         if not pool.closed:
@@ -173,11 +226,13 @@ def get_pool(branch_id: str | None = None, min_size: int = 4, max_size: int = 20
         if key in _connection_pools and not _connection_pools[key].closed:
             return _connection_pools[key]
 
-        conninfo = _build_conninfo(branch_id)
+        conninfo = _build_conninfo(user, branch_id)
         pool = ConnectionPool(
             conninfo=conninfo,
             min_size=min_size,
             max_size=max_size,
+            timeout=10,
+            max_lifetime=600,
             kwargs={"row_factory": dict_row},
             open=True,
         )
@@ -196,9 +251,9 @@ def close_all_pools():
 
 
 @contextmanager
-def get_connection(branch_id: str | None = None):
+def get_connection(user: UserContext, branch_id: str | None = None):
     """Context manager that yields a psycopg connection with dict_row."""
-    params = _get_connection_params(branch_id)
+    params = _get_connection_params(user, branch_id)
     conn = psycopg.connect(**params, row_factory=dict_row)
     try:
         yield conn
@@ -207,17 +262,22 @@ def get_connection(branch_id: str | None = None):
 
 
 @contextmanager
-def get_pooled_connection(branch_id: str | None = None):
+def get_pooled_connection(user: UserContext, branch_id: str | None = None):
     """Context manager that yields a connection from the pool."""
-    pool = get_pool(branch_id)
+    pool = get_pool(user, branch_id)
     with pool.connection() as conn:
         conn.row_factory = dict_row
         yield conn
 
 
-def execute_query(sql: str, params: tuple | None = None, branch_id: str | None = None) -> list[dict]:
+def execute_query(
+    user: UserContext,
+    sql: str,
+    params: tuple | None = None,
+    branch_id: str | None = None,
+) -> list[dict]:
     """Execute a query and return results as list of dicts."""
-    with get_connection(branch_id) as conn:
+    with get_connection(user, branch_id) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             if cur.description:
@@ -226,9 +286,14 @@ def execute_query(sql: str, params: tuple | None = None, branch_id: str | None =
             return [{"rowcount": cur.rowcount}]
 
 
-def execute_write(sql: str, params: tuple | None = None, branch_id: str | None = None) -> list[dict]:
+def execute_write(
+    user: UserContext,
+    sql: str,
+    params: tuple | None = None,
+    branch_id: str | None = None,
+) -> list[dict]:
     """Execute a write query (INSERT/UPDATE/DELETE), commit, return results."""
-    with get_connection(branch_id) as conn:
+    with get_connection(user, branch_id) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             if cur.description:
@@ -239,10 +304,10 @@ def execute_write(sql: str, params: tuple | None = None, branch_id: str | None =
             return [{"rowcount": cur.rowcount}]
 
 
-def get_db_metrics(branch_id: str | None = None) -> dict:
+def get_db_metrics(user: UserContext, branch_id: str | None = None) -> dict:
     """Fetch real-time DB-level metrics from pg_stat views."""
     try:
-        with get_pooled_connection(branch_id) as conn:
+        with get_pooled_connection(user, branch_id) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT

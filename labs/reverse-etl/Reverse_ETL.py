@@ -40,6 +40,10 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+show_app_link("sync", "Reverse ETL")
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Configuration
 # MAGIC
