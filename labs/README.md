@@ -36,6 +36,37 @@ Foundation (00_Setup)
     └── 9. App Deployment (best after exploring other paths)
 ```
 
+## Connecting & Querying Lakebase
+
+Before diving into a lab, it helps to know the ways you can connect to and query your Lakebase database. You'll use one or more of these across the labs.
+
+### Connection Methods
+
+| Method | Best For | Details |
+|--------|----------|---------|
+| **[Databricks SDK (OAuth)](https://docs.databricks.com/aws/en/oltp/projects/authentication)** | Notebooks, apps, automated pipelines | Generate short-lived OAuth tokens (1-hour TTL) via the SDK. Used by most labs in this workshop. |
+| **[Postgres passwords](https://docs.databricks.com/aws/en/oltp/projects/authentication)** | Quick local connections, external tools | Create a password-based Postgres role for tools that don't support OAuth. |
+| **[Connection strings](https://docs.databricks.com/aws/en/oltp/projects/connection-strings)** | Any standard Postgres driver | Standard `postgresql://` URI format. Works with psycopg, SQLAlchemy, JDBC, and any Postgres-compatible driver. |
+| **[Connection pooling (PgBouncer)](https://docs.databricks.com/aws/en/oltp/projects/connection-pooling)** | High-concurrency apps | Built-in PgBouncer pooler reduces connection overhead. Append port `6543` to your connection string. |
+| **[Framework examples](https://docs.databricks.com/aws/en/oltp/projects/framework-examples)** | Python, JavaScript, .NET, Go | Ready-to-use code snippets for popular languages and frameworks. |
+| **[Connect an application](https://docs.databricks.com/aws/en/oltp/projects/connect-application)** | Databricks Apps, external services | Patterns for connecting Databricks Apps or external applications using standard Postgres drivers. |
+| **[Data API (HTTP/REST)](https://docs.databricks.com/aws/en/oltp/projects/data-api)** | Lightweight clients, no driver needed | PostgREST-compatible REST interface — query your database over HTTP without a Postgres driver. |
+| **[Private Link](https://docs.databricks.com/aws/en/oltp/projects/private-link)** | Enterprise / private network | Requires two endpoints: inbound Private Link for API access and inbound Private Link for Postgres connections. |
+
+### Query Methods
+
+| Method | Best For | Details |
+|--------|----------|---------|
+| **[Lakebase SQL Editor](https://docs.databricks.com/aws/en/oltp/projects/sql-editor)** | Interactive Postgres queries | Web-based editor in the Lakebase App. Supports Postgres-native features like `EXPLAIN`/`ANALYZE` and meta-commands. |
+| **[SQL Editor (Lakehouse)](https://docs.databricks.com/aws/en/oltp/projects/query-sql-editor)** | Visualizations, dashboards, collaboration | Connect directly to Lakebase compute (full read-write) or register in Unity Catalog (read-only federated queries). |
+| **[Tables editor](https://docs.databricks.com/aws/en/oltp/projects/table-editor)** | Visual data management | Browse, edit, and manage data and schemas through an interactive UI. |
+| **[Postgres clients](https://docs.databricks.com/aws/en/oltp/projects/postgres-clients)** (psql, [pgAdmin](https://docs.databricks.com/aws/en/oltp/projects/connect-pgadmin), [DBeaver](https://docs.databricks.com/aws/en/oltp/projects/connect-dbeaver)) | Local development, ad-hoc queries | Any standard PostgreSQL client works — connect with OAuth tokens or Postgres passwords. |
+| **[Point-in-time queries](https://docs.databricks.com/aws/en/oltp/projects/point-in-time-branching)** | Debugging, auditing, time-travel | Query your database as it existed at any past moment using historical branches. |
+
+> **Tip:** The labs in this workshop primarily use the **Databricks SDK** for connections (OAuth tokens generated in notebook cells) and **psycopg** as the Postgres driver. If you prefer a different method, the patterns above all work with Lakebase Autoscaling.
+
+For the full reference, see: [Connect to your database](https://docs.databricks.com/aws/en/oltp/projects/connect) | [Query your data](https://docs.databricks.com/aws/en/oltp/projects/query-data)
+
 ## Tracks by Role
 
 Pick a track based on your role, or mix and match across tracks. Every lab is independent.

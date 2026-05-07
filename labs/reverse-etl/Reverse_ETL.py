@@ -8,9 +8,10 @@
 # MAGIC
 # MAGIC In this notebook you will:
 # MAGIC 1. Set up a Delta source table (use your own data or generate sample data)
-# MAGIC 2. Set up a synced table that pushes data to Lakebase
-# MAGIC 3. Check sync status
-# MAGIC 4. Update the source and observe the sync
+# MAGIC 2. Understand the three sync modes — **Snapshot**, **Triggered**, and **Continuous**
+# MAGIC 3. Set up a synced table that pushes data to Lakebase
+# MAGIC 4. Check sync status
+# MAGIC 5. Update the source and observe the sync
 # MAGIC
 # MAGIC **Prerequisites:**
 # MAGIC - Run `00_Setup_Lakebase_Project` first
@@ -121,9 +122,68 @@ display(spark.sql(f"SELECT * FROM {SOURCE_TABLE}"))
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Sync Pipeline Modes
+# MAGIC
+# MAGIC Before creating the synced table, it's important to understand the three **sync modes**
+# MAGIC available. Choose the right one based on your freshness requirements, cost tolerance,
+# MAGIC and source table characteristics.
+# MAGIC
+# MAGIC | Mode | How It Works | When to Use | CDF Required? |
+# MAGIC |------|-------------|-------------|---------------|
+# MAGIC | **Snapshot** | Full copy of all data each sync cycle | Source changes >10% of rows per cycle, or source doesn't support CDF (views, Iceberg tables) | No |
+# MAGIC | **Triggered** | Incremental updates run on demand or at intervals | Source rows change on a known cadence; good cost/freshness balance | Yes |
+# MAGIC | **Continuous** | Real-time streaming with seconds of latency (minimum 15-second intervals) | Changes must appear in Lakebase in near real time | Yes |
+# MAGIC
+# MAGIC ### Mode Details
+# MAGIC
+# MAGIC **Snapshot mode** performs a full replacement of all data on each sync. It is
+# MAGIC ~10× more efficient than incremental modes when more than 10% of rows change per
+# MAGIC cycle. Snapshot is also the *only* option for sources that don't support Change Data
+# MAGIC Feed, such as views, materialized views, and Iceberg tables.
+# MAGIC
+# MAGIC **Triggered mode** propagates inserts, updates, and deletes incrementally using
+# MAGIC Change Data Feed. Subsequent syncs must be triggered explicitly — either manually
+# MAGIC from Catalog Explorer, via the SDK, or by scheduling a **Database Table Sync pipeline**
+# MAGIC task in Lakeflow Jobs. This gives you precise control over when syncs run and is the
+# MAGIC most cost-effective option for tables that change on a predictable cadence.
+# MAGIC *Note: running triggered syncs at intervals shorter than 5 minutes can become expensive.*
+# MAGIC
+# MAGIC **Continuous mode** is fully self-managing — once started, it streams changes from
+# MAGIC the source table to Lakebase with near-real-time latency (seconds). It provides the
+# MAGIC lowest lag but at the highest cost, since the pipeline runs continuously.
+# MAGIC
+# MAGIC ### Scheduling Triggered & Snapshot Syncs
+# MAGIC
+# MAGIC For Snapshot and Triggered modes, the initial sync runs automatically on creation.
+# MAGIC To schedule subsequent syncs, create a Lakeflow Job with a **Database Table Sync
+# MAGIC pipeline** task:
+# MAGIC
+# MAGIC - **Table update trigger** — fires when the source Unity Catalog table is updated,
+# MAGIC   giving near-real-time freshness without the always-on cost of Continuous mode
+# MAGIC - **Cron schedule** — runs the sync at a fixed cadence (e.g., nightly or hourly),
+# MAGIC   well-suited for Snapshot mode where a periodic full refresh is most efficient
+# MAGIC
+# MAGIC ### Performance & Capacity
+# MAGIC
+# MAGIC | Write Pattern | Throughput (per CU) |
+# MAGIC |--------------|---------------------|
+# MAGIC | Continuous / Triggered (incremental) | ~150 rows/sec |
+# MAGIC | Snapshot (full refresh) | ~2,000 rows/sec |
+# MAGIC
+# MAGIC Each synced table uses up to 16 connections to your Lakebase database. Total logical
+# MAGIC data size limit across all synced tables is 8 TB. Databricks recommends individual
+# MAGIC tables not exceed 1 TB for tables requiring refreshes.
+# MAGIC
+# MAGIC > **Docs:** [Sync modes](https://docs.databricks.com/aws/en/oltp/projects/sync-tables#sync-modes)
+# MAGIC > &nbsp;|&nbsp; [Schedule syncs with Lakeflow Jobs](https://docs.databricks.com/aws/en/oltp/projects/sync-tables#schedule-or-trigger-subsequent-syncs)
+# MAGIC
+# MAGIC ---
+# MAGIC
 # MAGIC ## 2. Create the Synced Table
-# MAGIC This sets up a pipeline that continuously (or on trigger) pushes Delta
-# MAGIC changes into the Lakebase PostgreSQL branch.
+# MAGIC
+# MAGIC Below we create a synced table using **Triggered** mode. This means changes are
+# MAGIC propagated incrementally each time you trigger a sync (manually, via SDK, or via
+# MAGIC a Lakeflow Job). To use a different mode, change `SYNC_MODE` below.
 # MAGIC
 # MAGIC > **Where does the data land in Lakebase?** Synced tables automatically create a
 # MAGIC > PostgreSQL schema matching the UC schema name. Look for `products_synced` under
@@ -143,6 +203,14 @@ from databricks.sdk.service.postgres import (
 
 PRIMARY_KEY_COLUMNS = ["product_id"]
 
+# Choose: "TRIGGERED", "CONTINUOUS", or "SNAPSHOT"
+#   TRIGGERED  — incremental sync on demand (requires CDF on source table)
+#   CONTINUOUS — real-time streaming, lowest latency, highest cost (requires CDF)
+#   SNAPSHOT   — full data copy each cycle; works with any source including views
+SYNC_MODE = "TRIGGERED"
+
+scheduling_policy = SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy[SYNC_MODE]
+
 try:
     existing = w.postgres.get_synced_table(name=f"synced_tables/{SYNCED_TABLE}")
     print(f"Synced table already exists: {SYNCED_TABLE} (state: {existing.status.detailed_state})")
@@ -155,7 +223,7 @@ except Exception:
                 postgres_database="databricks_postgres",
                 source_table_full_name=SOURCE_TABLE,
                 primary_key_columns=PRIMARY_KEY_COLUMNS,
-                scheduling_policy=SyncedTableSyncedTableSpecSyncedTableSchedulingPolicy.TRIGGERED,
+                scheduling_policy=scheduling_policy,
                 new_pipeline_spec=NewPipelineSpec(
                     storage_catalog=UC_CATALOG,
                     storage_schema=UC_SCHEMA,
@@ -164,7 +232,7 @@ except Exception:
         ),
         synced_table_id=SYNCED_TABLE,
     )
-    print(f"✓ Synced table created: {SYNCED_TABLE}")
+    print(f"✓ Synced table created: {SYNCED_TABLE} (mode: {SYNC_MODE})")
 
 # COMMAND ----------
 
@@ -183,6 +251,13 @@ print(f"Message: {status.status.message or 'N/A'}")
 # MAGIC ## 4. Update Source & Trigger Re-sync
 # MAGIC Add rows to the Delta table, then trigger the pipeline again to see
 # MAGIC Reverse ETL push the changes to Lakebase.
+# MAGIC
+# MAGIC How the re-sync behaves depends on the sync mode you chose above:
+# MAGIC
+# MAGIC - **Triggered** — you must manually trigger a sync (button below, Catalog Explorer,
+# MAGIC   or a Lakeflow Job). Only changed rows are propagated via CDF.
+# MAGIC - **Continuous** — changes propagate automatically within seconds. No action needed.
+# MAGIC - **Snapshot** — you must trigger a sync, and it will re-copy all data (not just changes).
 # MAGIC
 # MAGIC **Using your own data?** Make a change to your source table (insert, update,
 # MAGIC or delete), then trigger a sync from Catalog Explorer → Synced Tables tab.
@@ -205,7 +280,10 @@ if not USE_OWN_DATA:
 else:
     print("Make a change to your source table, then trigger a re-sync.")
 
-print("Trigger a sync from Catalog Explorer → Synced Tables tab, or wait for the scheduled run.")
+if SYNC_MODE == "CONTINUOUS":
+    print("Continuous mode — changes will propagate automatically within seconds.")
+else:
+    print(f"{SYNC_MODE.title()} mode — trigger a sync from Catalog Explorer → Synced Tables tab, or schedule via a Lakeflow Job.")
 
 # COMMAND ----------
 
