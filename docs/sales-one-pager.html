@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lakebase Workshop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --teal: #0d9488;
+        --teal-soft: #ccfbf1;
+        --teal-tint: rgba(13, 148, 136, 0.08);
+
+        --ink: #0f172a;
+        --ink-2: #334155;
+        --ink-3: #64748b;
+        --ink-4: #94a3b8;
+
+        --bg: #fafbfc;
+        --bg-2: #f1f4f8;
+        --card: #ffffff;
+        --border: #e6e9ef;
+        --border-strong: #d4d9e2;
+
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+        --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+
+        --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 56px 56px 48px;
+      }
+
+      /* ---------- Hero ---------- */
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: var(--teal);
+        margin-bottom: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .eyebrow .dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--teal);
+      }
+
+      h1.title {
+        font-size: 40px;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -1px;
+        margin: 0 0 16px;
+        color: var(--ink);
+        max-width: 760px;
+      }
+
+      .lede {
+        font-size: 17px;
+        color: var(--ink-2);
+        line-height: 1.55;
+        margin: 0 0 28px;
+        max-width: 680px;
+      }
+
+      /* Quick facts strip */
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .fact {
+        padding: 18px 22px;
+        border-right: 1px solid var(--border);
+      }
+      .fact:last-child { border-right: none; }
+      .fact .label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--ink-4);
+        margin-bottom: 6px;
+      }
+      .fact .value {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ink);
+        letter-spacing: -0.2px;
+      }
+      .fact .value .accent { color: var(--teal); }
+
+      /* ---------- Section heads ---------- */
+      .section {
+        margin-top: 56px;
+      }
+      .section h2 {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.4px;
+        margin: 0 0 6px;
+        color: var(--ink);
+      }
+      .section .sub {
+        font-size: 14px;
+        color: var(--ink-3);
+        margin: 0 0 22px;
+        max-width: 640px;
+      }
+
+      /* ---------- Outcomes (what you'll get) ---------- */
+      .outcomes {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .outcome {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .outcome .num {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        color: var(--teal);
+        margin-bottom: 12px;
+      }
+      .outcome h3 {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0 0 6px;
+        color: var(--ink);
+        letter-spacing: -0.2px;
+      }
+      .outcome p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--ink-3);
+        line-height: 1.5;
+      }
+
+      /* ---------- Tracks ---------- */
+      .tracks {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .track {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 22px;
+      }
+      .track .track-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--teal);
+        margin-bottom: 10px;
+      }
+      .track h3 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        color: var(--ink);
+        letter-spacing: -0.2px;
+      }
+      .track .for {
+        font-size: 12px;
+        color: var(--ink-4);
+        margin: 0 0 16px;
+      }
+      .track ul {
+        margin: 0; padding: 0;
+        list-style: none;
+      }
+      .track ul li {
+        padding: 8px 0;
+        font-size: 13px;
+        color: var(--ink-2);
+        border-top: 1px solid var(--border);
+        line-height: 1.4;
+      }
+      .track ul li:first-child { border-top: none; padding-top: 0; }
+      .track ul li b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ---------- Agenda ---------- */
+      .agenda {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .agenda-row {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        align-items: baseline;
+        padding: 14px 22px;
+        border-top: 1px solid var(--border);
+      }
+      .agenda-row:first-child { border-top: none; }
+      .agenda-row .time {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--teal);
+        letter-spacing: 0.2px;
+      }
+      .agenda-row .activity {
+        font-size: 13.5px;
+        color: var(--ink-2);
+        line-height: 1.4;
+      }
+      .agenda-row .activity b {
+        color: var(--ink);
+        font-weight: 700;
+        margin-right: 8px;
+      }
+
+      /* ---------- Why Lakebase: simple value bullets ---------- */
+      .values {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .value {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+      .value .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: var(--teal-tint);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--teal);
+      }
+      .value .icon svg { width: 18px; height: 18px; }
+      .value h3 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+        letter-spacing: -0.2px;
+      }
+      .value p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--ink-3);
+        line-height: 1.5;
+      }
+
+      /* ---------- Detail (Today vs Lakebase) ---------- */
+      details.detail {
+        margin-top: 18px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      details.detail > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 14px 22px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+      }
+      details.detail > summary::-webkit-details-marker { display: none; }
+      details.detail > summary .chev {
+        color: var(--ink-3);
+        transition: transform 0.2s ease;
+      }
+      details.detail[open] > summary .chev {
+        transform: rotate(180deg);
+      }
+      details.detail .body {
+        padding: 0 22px 22px;
+      }
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .compare .col {
+        background: var(--bg-2);
+        border-radius: 10px;
+        padding: 16px 18px;
+      }
+      .compare .col.is-teal { background: var(--teal-tint); }
+      .compare .col-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--ink-4);
+        margin-bottom: 10px;
+      }
+      .compare .col.is-teal .col-label { color: var(--teal); }
+      .compare ul {
+        margin: 0; padding: 0; list-style: none;
+        font-size: 12.5px;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+      .compare ul li {
+        padding: 6px 0;
+        border-top: 1px dashed var(--border-strong);
+      }
+      .compare ul li:first-child { border-top: none; padding-top: 0; }
+
+      /* ---------- CTA ---------- */
+      .cta {
+        margin-top: 56px;
+        padding: 28px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .cta h3 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+        color: var(--ink);
+      }
+      .cta p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--ink-3);
+        max-width: 560px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: var(--teal);
+        color: white;
+        font-weight: 700;
+        font-size: 13px;
+        border-radius: 8px;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background 0.15s ease;
+      }
+      .btn:hover { background: #0b7a70; }
+
+      footer.meta {
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 11px;
+        color: var(--ink-4);
+      }
+      footer.meta a { color: var(--teal); text-decoration: none; }
+
+      /* ---------- Print ---------- */
+      @page { size: Letter; margin: 0.5in; }
+      @media print {
+        body { background: white; }
+        .page { max-width: none; padding: 0; }
+        .outcome, .track, .agenda, .value, .cta, details.detail, .facts {
+          box-shadow: none !important;
+          break-inside: avoid;
+        }
+        .btn { background: var(--teal) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+
+      @media (max-width: 820px) {
+        .page { padding: 32px 22px; }
+        h1.title { font-size: 30px; }
+        .lede { font-size: 15px; }
+        .facts { grid-template-columns: repeat(2, 1fr); }
+        .fact:nth-child(2) { border-right: none; }
+        .fact:nth-child(1), .fact:nth-child(2) { border-bottom: 1px solid var(--border); }
+        .outcomes { grid-template-columns: repeat(2, 1fr); }
+        .tracks { grid-template-columns: 1fr; }
+        .values { grid-template-columns: 1fr; }
+        .compare { grid-template-columns: 1fr; }
+        .cta { flex-direction: column; align-items: flex-start; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- Hero -->
+      <div class="eyebrow"><span class="dot"></span>Databricks Workshop</div>
+      <h1 class="title">Lakebase Workshop</h1>
+      <p class="lede">
+        A hands-on, half-day workshop where your team stands up a real production-grade Postgres database inside Databricks &mdash; and proves it can replace what you run today.
+      </p>
+
+      <div class="facts">
+        <div class="fact">
+          <div class="label">Duration</div>
+          <div class="value"><span class="accent">2.5 hours</span></div>
+        </div>
+        <div class="fact">
+          <div class="label">Format</div>
+          <div class="value">Facilitator-led, hands-on</div>
+        </div>
+        <div class="fact">
+          <div class="label">Audience</div>
+          <div class="value">5&ndash;30 engineers</div>
+        </div>
+        <div class="fact">
+          <div class="label">Where</div>
+          <div class="value">Your Databricks workspace</div>
+        </div>
+      </div>
+
+      <!-- What you'll leave with -->
+      <div class="section">
+        <h2>What your team leaves with</h2>
+        <p class="sub">Working systems, real experience, and a clear point of view on Lakebase &mdash; not a slide deck.</p>
+        <div class="outcomes">
+          <div class="outcome">
+            <div class="num">01</div>
+            <h3>A live Lakebase database</h3>
+            <p>Each engineer has a working project in their own workspace, ready to keep using.</p>
+          </div>
+          <div class="outcome">
+            <div class="num">02</div>
+            <h3>Hands-on across nine labs</h3>
+            <p>CRUD, branching, autoscaling, reverse ETL, online features, agent memory, OAuth, PITR.</p>
+          </div>
+          <div class="outcome">
+            <div class="num">03</div>
+            <h3>A deployed reference app</h3>
+            <p>Full-stack React + FastAPI + Lakebase on Databricks Apps &mdash; the production pattern, working.</p>
+          </div>
+          <div class="outcome">
+            <div class="num">04</div>
+            <h3>A confident eval position</h3>
+            <p>Enough hands-on experience to answer &ldquo;can Lakebase replace what we run today?&rdquo; honestly.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracks -->
+      <div class="section">
+        <h2>Three tracks, one session</h2>
+        <p class="sub">Everyone runs a shared foundation, then splits into a role-based track. All labs are independent &mdash; mix and match across tracks.</p>
+        <div class="tracks">
+          <div class="track">
+            <div class="track-label">Application Builders</div>
+            <h3>Build apps and agents</h3>
+            <p class="for">App developers &middot; AI engineers</p>
+            <ul>
+              <li><b>Data Operations</b> &mdash; CRUD, JSONB, transactions</li>
+              <li><b>Agentic Memory</b> &mdash; persistent agent state</li>
+              <li><b>App Deployment</b> &mdash; full-stack app capstone</li>
+            </ul>
+          </div>
+          <div class="track">
+            <div class="track-label">Data &amp; ML Engineers</div>
+            <h3>Serve the Lakehouse</h3>
+            <p class="for">Data engineers &middot; ML platform teams</p>
+            <ul>
+              <li><b>Reverse ETL</b> &mdash; Delta &rarr; Lakebase sync</li>
+              <li><b>Online Feature Store</b> &mdash; ML serving on Lakebase</li>
+              <li><b>Observability</b> &mdash; pg_stat, index analysis</li>
+            </ul>
+          </div>
+          <div class="track">
+            <div class="track-label">Platform Architects</div>
+            <h3>Evaluate for production</h3>
+            <p class="for">Infra &middot; security &middot; FinOps</p>
+            <ul>
+              <li><b>Dev Experience</b> &mdash; branching, autoscaling</li>
+              <li><b>Authentication</b> &mdash; OAuth, roles, permissions</li>
+              <li><b>Backup &amp; Recovery</b> &mdash; PITR, snapshots</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agenda -->
+      <div class="section">
+        <h2>Agenda</h2>
+        <p class="sub">A standard 2.5-hour session. 90- and 60-minute variants are available.</p>
+        <div class="agenda">
+          <div class="agenda-row">
+            <div class="time">0:00 &mdash; 0:15</div>
+            <div class="activity"><b>Introduction</b>What Lakebase is and where it fits in the Lakehouse.</div>
+          </div>
+          <div class="agenda-row">
+            <div class="time">0:15 &mdash; 0:30</div>
+            <div class="activity"><b>Setup</b>Clone the repo, authenticate, deploy the workshop bundle.</div>
+          </div>
+          <div class="agenda-row">
+            <div class="time">0:30 &mdash; 0:45</div>
+            <div class="activity"><b>Foundation</b>Each participant provisions their own Lakebase project.</div>
+          </div>
+          <div class="agenda-row">
+            <div class="time">0:45 &mdash; 1:45</div>
+            <div class="activity"><b>Track time</b>Three labs along the chosen role-based track.</div>
+          </div>
+          <div class="agenda-row">
+            <div class="time">1:45 &mdash; 2:15</div>
+            <div class="activity"><b>Cross-track</b>Pick a lab from another track to broaden coverage.</div>
+          </div>
+          <div class="agenda-row">
+            <div class="time">2:15 &mdash; 2:30</div>
+            <div class="activity"><b>Wrap-up</b>Capstone app overview, Q&amp;A, and next steps.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Why Lakebase -->
+      <div class="section">
+        <h2>Why this matters</h2>
+        <p class="sub">Lakebase consolidates the operational database, the online feature store, and agent memory onto one managed service inside the Lakehouse.</p>
+        <div class="values">
+          <div class="value">
+            <div class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6"/></svg>
+            </div>
+            <div>
+              <h3>One engine, one bill</h3>
+              <p>Operational Postgres, online feature store, and agent memory consolidate onto a single managed service governed by Unity Catalog.</p>
+            </div>
+          </div>
+          <div class="value">
+            <div class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 6h6a3 3 0 0 1 3 3v0M9 18h6a3 3 0 0 0 3-3v0"/></svg>
+            </div>
+            <div>
+              <h3>Branches instead of tickets</h3>
+              <p>Developers self-serve isolated database environments in seconds. Non-prod branches scale to zero, so idle dev costs nothing.</p>
+            </div>
+          </div>
+          <div class="value">
+            <div class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <div>
+              <h3>No static passwords</h3>
+              <p>Short-lived OAuth tokens with automatic rotation. Identities governed by the same Unity Catalog policies as the rest of the Lakehouse.</p>
+            </div>
+          </div>
+          <div class="value">
+            <div class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>
+            </div>
+            <div>
+              <h3>Always-on recovery</h3>
+              <p>35-day point-in-time recovery built in. Restore by branching from any past moment &mdash; no restore job, no downtime.</p>
+            </div>
+          </div>
+        </div>
+
+        <details class="detail">
+          <summary>
+            <span>See how Lakebase compares to what most customers run today</span>
+            <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </summary>
+          <div class="body">
+            <div class="compare">
+              <div class="col">
+                <div class="col-label">Today</div>
+                <ul>
+                  <li>Self-managed Postgres alongside Databricks</li>
+                  <li>Hand-built reverse-ETL pipelines</li>
+                  <li>A separate online feature store with its own infra</li>
+                  <li>Static passwords and manual credential rotation</li>
+                  <li>Dev/test replicas paid for 24/7</li>
+                  <li>Custom backup orchestration, hours-long restores</li>
+                </ul>
+              </div>
+              <div class="col is-teal">
+                <div class="col-label">With Lakebase</div>
+                <ul>
+                  <li>Fully-managed Postgres, provisioned in minutes</li>
+                  <li>Native Delta &rarr; Lakebase synced tables with CDF</li>
+                  <li>Online feature store <b>is</b> Lakebase &mdash; one engine</li>
+                  <li>OAuth-only, 1-hour TTL, Unity Catalog governed</li>
+                  <li>Copy-on-write branches, scale-to-zero when idle</li>
+                  <li>Always-on PITR, instant restore via branching</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- CTA -->
+      <div class="cta">
+        <div>
+          <h3>Pick a date. We handle the rest.</h3>
+          <p>A Databricks Solutions Architect facilitates the session, validates your workspace, and deploys the workshop. Your team brings laptops.</p>
+        </div>
+        <a class="btn" href="mailto:?subject=Lakebase%20Workshop%20request">Talk to your Databricks team &rarr;</a>
+      </div>
+
+      <footer class="meta">
+        <span>Lakebase Workshop &middot; <a href="WORKSHOP_FACILITATOR.md">Facilitator Guide</a> &middot; <a href="SALES_ONE_PAGER.md">Full datasheet</a></span>
+        <span>databricks.com</span>
+      </footer>
+    </div>
+  </body>
+</html>
